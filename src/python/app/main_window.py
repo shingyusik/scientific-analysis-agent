@@ -62,6 +62,7 @@ class MainWindow(QMainWindow):
         self.pipeline_tree.itemChanged.connect(self.toggle_visibility) # Handle checkbox changes
         self.pipeline_tree.setContextMenuPolicy(Qt.CustomContextMenu) # Enable Right-click
         self.pipeline_tree.customContextMenuRequested.connect(self.show_context_menu)
+        self.pipeline_tree.itemClicked.connect(self.update_properties_panel)
         left_sidebar.addWidget(self.pipeline_tree)
         
         # 2. Properties/Information Tabs
@@ -123,13 +124,13 @@ class MainWindow(QMainWindow):
             msg = self.engine.greet("User")
             self.chat_display.append(f"System: {msg}")
         else:
-            self.chat_display.append("System: Warning - sa_engine not found. C++ features disabled.")
+            self.chat_display.append("System: Warning - sa_engine not available.")
 
         # Test Item (Cone) initial render
         # We need to manually add it to tree and get actor
         self.vtk_widget.clear_scene() # Start clean
-        cone_actor = self.vtk_widget.render_cone()
-        self.add_pipeline_item("Cone Source", "Analysis Generator", "Height=3.0\nRadius=1.0\nRes=10", cone_actor)
+        cone_actor, cone_data = self.vtk_widget.render_cone()
+        self.add_pipeline_item("Cone Source", "Analysis Generator", cone_actor, cone_data)
 
     def handle_send(self):
         text = self.input_field.text()
@@ -146,27 +147,48 @@ class MainWindow(QMainWindow):
             base_name = os.path.basename(file_name)
             self.chat_display.append(f"System: Loading {file_name}...")
             try:
-                actor = self.vtk_widget.render_file(file_name)
+                actor, data_obj = self.vtk_widget.render_file(file_name)
                 if actor:
                     self.chat_display.append("System: Visualization updated.")
                     # Add to Pipeline Tree
-                    self.add_pipeline_item(base_name, "File Source", f"Path: {file_name}\nType: VTK Unstructured/Image Data", actor)
+                    self.add_pipeline_item(base_name, "File Source", actor, data_obj)
                 else:
                     self.chat_display.append("System: Failed to render file.")
                 
             except Exception as e:
                 self.chat_display.append(f"System: Error loading file - {e}")
 
-    def add_pipeline_item(self, name, type_desc, info_desc, actor=None):
+    def add_pipeline_item(self, name, type_desc, actor=None, data_obj=None):
         item = QTreeWidgetItem(self.pipeline_tree)
         item.setText(0, name)
         item.setCheckState(0, Qt.Checked) # Checkbox for visibility
         
-        # Store metadata inside the item (could use separate dict, but data() is convenient)
-        # Using role 32+ for custom data
+        # Information extraction (Using Python VTK API for now due to missing C++ headers in project)
+        info_str = "No data object."
+        if data_obj:
+            try:
+                pts = data_obj.GetNumberOfPoints()
+                cells = data_obj.GetNumberOfCells()
+                bounds = data_obj.GetBounds()
+                bounds_str = f"[{bounds[0]:.2f}, {bounds[1]:.2f}] x [{bounds[2]:.2f}, {bounds[3]:.2f}] x [{bounds[4]:.2f}, {bounds[5]:.2f}]"
+                
+                pt_arrays = [data_obj.GetPointData().GetArrayName(i) for i in range(data_obj.GetPointData().GetNumberOfArrays())]
+                cell_arrays = [data_obj.GetCellData().GetArrayName(i) for i in range(data_obj.GetCellData().GetNumberOfArrays())]
+                
+                info_str = (
+                    f"Points: {pts}\n"
+                    f"Cells: {cells}\n"
+                    f"Bounds: {bounds_str}\n"
+                    f"Point Arrays: {', '.join(pt_arrays) if pt_arrays else 'None'}\n"
+                    f"Cell Arrays: {', '.join(cell_arrays) if cell_arrays else 'None'}"
+                )
+            except Exception as e:
+                info_str = f"Error extracting info: {e}"
+
+        # Store metadata inside the item
         item.setData(0, Qt.UserRole, actor)
         item.setData(0, Qt.UserRole + 1, type_desc)
-        item.setData(0, Qt.UserRole + 2, info_desc)
+        item.setData(0, Qt.UserRole + 2, info_str)
         
         self.pipeline_tree.setCurrentItem(item)
         self.update_properties_panel(item)

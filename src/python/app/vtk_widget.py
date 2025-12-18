@@ -59,7 +59,7 @@ class VTKWidget(QWidget):
         self.render_cone()
 
     def render_cone(self):
-        if not self.renderer: return None
+        if not self.renderer: return None, None
         
         # Source
         cone = vtk.vtkConeSource()
@@ -76,17 +76,18 @@ class VTKWidget(QWidget):
         actor.SetMapper(mapper)
         actor.GetProperty().SetColor(1.0, 0.6, 0.2) # Orange
         
-        # self.clear_scene() # No longer auto-clearing for multi-object support logic
         self.renderer.AddActor(actor)
-        self.reset_camera() # Set initial view to Isometric
+        self.reset_camera()
         
-        return actor
+        # We return the data object (output of source) for analysis
+        cone.Update()
+        return actor, cone.GetOutput()
 
     def render_file(self, file_path):
-        if not self.renderer: return None
+        if not self.renderer: return None, None
         
         if not os.path.exists(file_path):
-            return None
+            return None, None
 
         ext = os.path.splitext(file_path)[1].lower()
         reader = None
@@ -99,14 +100,16 @@ class VTKWidget(QWidget):
             reader = vtk.vtkDataSetReader()
         else:
             print(f"Unsupported format: {ext}")
-            return None
+            return None, None
             
         reader.SetFileName(file_path)
         reader.Update()
         
+        data_obj = reader.GetOutput()
+        
         # Create Mapper
         mapper = vtk.vtkDataSetMapper()
-        mapper.SetInputConnection(reader.GetOutputPort())
+        mapper.SetInputData(data_obj)
         
         # Create Actor
         actor = vtk.vtkActor()
@@ -114,12 +117,11 @@ class VTKWidget(QWidget):
         actor.GetProperty().SetEdgeColor(0, 0, 0)
         actor.GetProperty().EdgeVisibilityOn()
         
-        # self.clear_scene()
         self.renderer.AddActor(actor)
-        self.reset_camera() # Set initial view to Isometric
+        self.reset_camera()
         self.vtkWidget.GetRenderWindow().Render()
         
-        return actor
+        return actor, data_obj
 
     def remove_actor(self, actor):
         if not self.renderer or not actor: return
