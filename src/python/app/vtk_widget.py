@@ -31,7 +31,7 @@ class VTKWidget(QWidget):
         
         # Setup Renderer
         self.renderer = vtk.vtkRenderer()
-        self.renderer.SetBackground(0.2, 0.3, 0.4) # Nice slate blue
+        self.renderer.SetBackground(0.32, 0.34, 0.43) # Warm Gray (Matches Default preset)
         self.vtkWidget.GetRenderWindow().AddRenderer(self.renderer)
         
         # Initialize
@@ -131,6 +131,16 @@ class VTKWidget(QWidget):
     def set_actor_visibility(self, actor, visible):
         if not actor: return
         actor.SetVisibility(visible)
+        self.vtkWidget.GetRenderWindow().Render()
+
+    def set_background_color(self, color1, color2=None):
+        if not self.renderer: return
+        self.renderer.SetBackground(*color1)
+        if color2:
+            self.renderer.SetBackground2(*color2)
+            self.renderer.GradientBackgroundOn()
+        else:
+            self.renderer.GradientBackgroundOff()
         self.vtkWidget.GetRenderWindow().Render()
 
     def clear_scene(self):
