@@ -1,14 +1,11 @@
-#pragma once
-
 #include <string>
 
 namespace sa {
-    class Engine {
-    public:
-        Engine();
-        ~Engine();
+class Engine {
+public:
+  Engine();
+  ~Engine();
 
-        std::string greet(const std::string& name);
-        // Future: add VTK processing methods here
-    };
-}
+  std::string greet(const std::string &name);
+};
+} // namespace sa
