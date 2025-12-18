@@ -1,0 +1,30 @@
+[project]
+name = "sa-agent"
+version = "0.1.0"
+description = "Scientific Analysis Agent with VTK and LangGraph"
+authors = [
+    {name = "User", email = "user@example.com"},
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6",
+    "vtk",
+    "langgraph",
+    "langchain",
+    "pybind11",
+]
+
+[build-system]
+requires = ["scikit-build-core", "pybind11", "vtk"]
+build-backend = "scikit_build_core.build"
+
+[tool.scikit-build]
+cmake.version = ">=3.15"
+ninja.version = ">=1.5"
+wheel.packages = ["src/python/sa_engine"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+]
