@@ -59,7 +59,7 @@ class VTKWidget(QWidget):
         self.render_cone()
 
     def render_cone(self):
-        if not self.renderer: return
+        if not self.renderer: return None
         
         # Source
         cone = vtk.vtkConeSource()
@@ -76,16 +76,17 @@ class VTKWidget(QWidget):
         actor.SetMapper(mapper)
         actor.GetProperty().SetColor(1.0, 0.6, 0.2) # Orange
         
-        self.clear_scene()
+        # self.clear_scene() # No longer auto-clearing for multi-object support logic
         self.renderer.AddActor(actor)
-        self.renderer.ResetCamera()
-        self.vtkWidget.GetRenderWindow().Render()
+        self.reset_camera() # Set initial view to Isometric
+        
+        return actor
 
     def render_file(self, file_path):
-        if not self.renderer: return
+        if not self.renderer: return None
         
         if not os.path.exists(file_path):
-            return
+            return None
 
         ext = os.path.splitext(file_path)[1].lower()
         reader = None
@@ -98,8 +99,8 @@ class VTKWidget(QWidget):
             reader = vtk.vtkDataSetReader()
         else:
             print(f"Unsupported format: {ext}")
-            return
-
+            return None
+            
         reader.SetFileName(file_path)
         reader.Update()
         
@@ -113,17 +114,38 @@ class VTKWidget(QWidget):
         actor.GetProperty().SetEdgeColor(0, 0, 0)
         actor.GetProperty().EdgeVisibilityOn()
         
-        self.clear_scene()
+        # self.clear_scene()
         self.renderer.AddActor(actor)
-        self.renderer.ResetCamera()
+        self.reset_camera() # Set initial view to Isometric
+        self.vtkWidget.GetRenderWindow().Render()
+        
+        return actor
+
+    def remove_actor(self, actor):
+        if not self.renderer or not actor: return
+        self.renderer.RemoveActor(actor)
+        self.vtkWidget.GetRenderWindow().Render()
+
+    def set_actor_visibility(self, actor, visible):
+        if not actor: return
+        actor.SetVisibility(visible)
         self.vtkWidget.GetRenderWindow().Render()
 
     def clear_scene(self):
         self.renderer.RemoveAllViewProps()
+        # Re-add axes if cleared (though axes is a widget, RemoveAllViewProps usually removes actors/props)
+        # Actually RemoveAllViewProps removes props added to renderer. AxesWidget is separate.
+        self.vtkWidget.GetRenderWindow().Render()
 
     def reset_camera(self):
         if not self.renderer: return
-        self.renderer.ResetCamera()
+        # Reset camera parameters to Isometric view (1, 1, 1)
+        camera = self.renderer.GetActiveCamera()
+        camera.SetPosition(1, 1, 1) 
+        camera.SetFocalPoint(0, 0, 0)
+        camera.SetViewUp(0, 0, 1) # Z-up assumption for 3D view
+        
+        self.renderer.ResetCamera() # Fit to bounds
         self.vtkWidget.GetRenderWindow().Render()
 
     def set_view_xy(self):

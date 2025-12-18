@@ -1,6 +1,11 @@
-from PySide6.QtWidgets import QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, QPushButton, QLabel, QFileDialog
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, 
+                               QPushButton, QLabel, QFileDialog, QSplitter, QTreeWidget, QTreeWidgetItem, 
+                               QTabWidget, QMenuBar, QMenu)
+from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 from app.vtk_widget import VTKWidget
+import os
+
 try:
     import sa_engine
 except ImportError:
@@ -10,9 +15,23 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Scientific Analysis Agent")
-        self.resize(1200, 800)
+        self.resize(1400, 900)
         
-        # Toolbar
+        # --- 1. Menu Bar ---
+        menu_bar = self.menuBar()
+        file_menu = menu_bar.addMenu("File")
+        
+        load_action = QAction("Load Data...", self)
+        load_action.setShortcut("Ctrl+O")
+        load_action.triggered.connect(self.load_file)
+        file_menu.addAction(load_action)
+        
+        exit_action = QAction("Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+
+        # --- 2. Toolbar (View Controls) ---
         toolbar = self.addToolBar("View Controls")
         
         action_reset = toolbar.addAction("Home (Reset)")
@@ -29,19 +48,50 @@ class MainWindow(QMainWindow):
         action_xz = toolbar.addAction("XZ Plane")
         action_xz.triggered.connect(lambda: self.vtk_widget.set_view_xz())
 
-        # Central widget and layout
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QHBoxLayout(central_widget)
+        # --- 3. Main Layout (Splitter) ---
+        # We use QSplitter for resizable panels: [Left Sidebar] | [VTK View] | [Right Chat]
+        main_splitter = QSplitter(Qt.Horizontal)
+        self.setCentralWidget(main_splitter)
+
+        # [Left Sidebar] Pipeline Browser & Properties
+        left_sidebar = QSplitter(Qt.Vertical)
         
-        # Left: VTK Visualization
+        # 1. Working Tree (Pipeline Browser)
+        self.pipeline_tree = QTreeWidget()
+        self.pipeline_tree.setHeaderLabel("Pipeline Browser")
+        self.pipeline_tree.itemChanged.connect(self.toggle_visibility) # Handle checkbox changes
+        self.pipeline_tree.setContextMenuPolicy(Qt.CustomContextMenu) # Enable Right-click
+        self.pipeline_tree.customContextMenuRequested.connect(self.show_context_menu)
+        left_sidebar.addWidget(self.pipeline_tree)
+        
+        # 2. Properties/Information Tabs
+        self.details_tabs = QTabWidget()
+        
+        # Properties Tab (Placeholder)
+        self.properties_page = QTextEdit()
+        self.properties_page.setPlainText("No item selected.")
+        self.properties_page.setReadOnly(True) 
+        self.details_tabs.addTab(self.properties_page, "Properties")
+        
+        # Information Tab
+        self.info_page = QTextEdit()
+        self.info_page.setReadOnly(True)
+        self.details_tabs.addTab(self.info_page, "Information")
+        
+        left_sidebar.addWidget(self.details_tabs)
+        left_sidebar.setStretchFactor(0, 1) # Tree
+        left_sidebar.setStretchFactor(1, 1) # Tabs
+        
+        main_splitter.addWidget(left_sidebar)
+
+        # [Center] VTK Visualization
         self.vtk_widget = VTKWidget()
-        main_layout.addWidget(self.vtk_widget, stretch=2)
-        
-        # Right: Chat/Control Panel
+        main_splitter.addWidget(self.vtk_widget)
+
+        # [Right] Chat/Control Panel
         right_panel = QWidget()
         right_layout = QVBoxLayout(right_panel)
-        main_layout.addWidget(right_panel, stretch=1)
+        right_layout.setContentsMargins(5, 5, 5, 5)
         
         # Chat Display
         self.chat_display = QTextEdit()
@@ -51,16 +101,21 @@ class MainWindow(QMainWindow):
         # Input Area
         input_layout = QHBoxLayout()
         self.input_field = QLineEdit()
+        self.input_field.returnPressed.connect(self.handle_send) # Enter key sends
         self.send_button = QPushButton("Send")
         self.send_button.clicked.connect(self.handle_send)
         input_layout.addWidget(self.input_field)
         input_layout.addWidget(self.send_button)
         right_layout.addLayout(input_layout)
         
-        # File Upload
-        self.upload_button = QPushButton("Load VTK File")
-        self.upload_button.clicked.connect(self.load_file)
-        right_layout.addWidget(self.upload_button)
+        # Removed "Load VTK File" button as requested
+        
+        main_splitter.addWidget(right_panel)
+        
+        # Set initial stretch factors (Sidebar: 15%, VTK: 60%, Chat: 25%)
+        main_splitter.setStretchFactor(0, 1)
+        main_splitter.setStretchFactor(1, 5)
+        main_splitter.setStretchFactor(2, 2)
         
         # Initialize Engine
         if sa_engine:
@@ -69,6 +124,12 @@ class MainWindow(QMainWindow):
             self.chat_display.append(f"System: {msg}")
         else:
             self.chat_display.append("System: Warning - sa_engine not found. C++ features disabled.")
+
+        # Test Item (Cone) initial render
+        # We need to manually add it to tree and get actor
+        self.vtk_widget.clear_scene() # Start clean
+        cone_actor = self.vtk_widget.render_cone()
+        self.add_pipeline_item("Cone Source", "Analysis Generator", "Height=3.0\nRadius=1.0\nRes=10", cone_actor)
 
     def handle_send(self):
         text = self.input_field.text()
@@ -80,11 +141,74 @@ class MainWindow(QMainWindow):
         self.chat_display.append("Agent: (Thinking...) [Agent logic to be implemented]")
 
     def load_file(self):
-        file_name, _ = QFileDialog.getOpenFileName(self, "Open VTK File", "", "VTK Files (*.vtu *.vti *.vtk)")
+        file_name, _ = QFileDialog.getOpenFileName(self, "Load Data", "", "VTK Files (*.vtu *.vti *.vtk)")
         if file_name:
+            base_name = os.path.basename(file_name)
             self.chat_display.append(f"System: Loading {file_name}...")
             try:
-                self.vtk_widget.render_file(file_name)
-                self.chat_display.append("System: Visualization updated.")
+                actor = self.vtk_widget.render_file(file_name)
+                if actor:
+                    self.chat_display.append("System: Visualization updated.")
+                    # Add to Pipeline Tree
+                    self.add_pipeline_item(base_name, "File Source", f"Path: {file_name}\nType: VTK Unstructured/Image Data", actor)
+                else:
+                    self.chat_display.append("System: Failed to render file.")
+                
             except Exception as e:
                 self.chat_display.append(f"System: Error loading file - {e}")
+
+    def add_pipeline_item(self, name, type_desc, info_desc, actor=None):
+        item = QTreeWidgetItem(self.pipeline_tree)
+        item.setText(0, name)
+        item.setCheckState(0, Qt.Checked) # Checkbox for visibility
+        
+        # Store metadata inside the item (could use separate dict, but data() is convenient)
+        # Using role 32+ for custom data
+        item.setData(0, Qt.UserRole, actor)
+        item.setData(0, Qt.UserRole + 1, type_desc)
+        item.setData(0, Qt.UserRole + 2, info_desc)
+        
+        self.pipeline_tree.setCurrentItem(item)
+        self.update_properties_panel(item)
+
+    def toggle_visibility(self, item, column):
+        actor = item.data(0, Qt.UserRole)
+        if actor:
+            visible = (item.checkState(0) == Qt.Checked)
+            self.vtk_widget.set_actor_visibility(actor, visible)
+
+    def show_context_menu(self, position):
+        item = self.pipeline_tree.itemAt(position)
+        if not item: return
+        
+        menu = QMenu()
+        delete_action = menu.addAction("Delete")
+        action = menu.exec(self.pipeline_tree.viewport().mapToGlobal(position))
+        
+        if action == delete_action:
+            self.delete_item(item)
+
+    def delete_item(self, item):
+        actor = item.data(0, Qt.UserRole)
+        if actor:
+            self.vtk_widget.remove_actor(actor)
+        
+        # Remove from tree
+        index = self.pipeline_tree.indexOfTopLevelItem(item)
+        self.pipeline_tree.takeTopLevelItem(index)
+        
+        self.properties_page.setPlainText("Deleted.")
+        self.info_page.setPlainText("")
+
+    def update_properties_panel(self, item):
+        if not item:
+            self.properties_page.setPlainText("No item selected.")
+            self.info_page.setPlainText("")
+            return
+            
+        name = item.text(0)
+        type_desc = item.data(0, Qt.UserRole + 1)
+        info_desc = item.data(0, Qt.UserRole + 2)
+        
+        self.properties_page.setPlainText(f"Name: {name}\nType: {type_desc}")
+        self.info_page.setPlainText(info_desc)
