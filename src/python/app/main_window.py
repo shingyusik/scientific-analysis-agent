@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, 
                                QPushButton, QLabel, QFileDialog, QSplitter, QTreeWidget, QTreeWidgetItem, 
-                               QTabWidget, QMenuBar, QMenu)
+                               QTabWidget, QMenuBar, QMenu, QToolButton)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 from app.vtk_widget import VTKWidget
@@ -47,6 +47,37 @@ class MainWindow(QMainWindow):
         
         action_xz = toolbar.addAction("XZ Plane")
         action_xz.triggered.connect(lambda: self.vtk_widget.set_view_xz())
+
+        toolbar.addSeparator()
+
+        # Background Color Dropdown
+        bg_tool_button = QToolButton()
+        bg_tool_button.setText("Background")
+        bg_tool_button.setPopupMode(QToolButton.InstantPopup)
+        # Add padding to avoid overlap with the arrow
+        bg_tool_button.setStyleSheet("QToolButton { padding-right: 15px; } QToolButton::menu-indicator { subcontrol-origin: padding; subcontrol-position: center right; }")
+        
+        bg_menu = QMenu(self)
+        
+        # Color presets
+        presets = [
+            ("Warm Gray (Default)", (0.32, 0.34, 0.43), None),
+            ("Blue Gray", (0.2, 0.3, 0.4), None),
+            ("Dark Gray", (0.1, 0.1, 0.1), None),
+            ("Neutral Gray", (0.5, 0.5, 0.5), None),
+            ("Light Gray", (0.8, 0.8, 0.8), None),
+            ("White", (1.0, 1.0, 1.0), None),
+            ("Black", (0.0, 0.0, 0.0), None),
+            ("Gradient Background", (0.32, 0.34, 0.43), (0.0, 0.0, 0.0)),
+        ]
+        
+        for name, c1, c2 in presets:
+            action = bg_menu.addAction(name)
+            # Use default arguments in lambda to capture loop variables correctly
+            action.triggered.connect(lambda checked=False, col1=c1, col2=c2: self.vtk_widget.set_background_color(col1, col2))
+        
+        bg_tool_button.setMenu(bg_menu)
+        toolbar.addWidget(bg_tool_button)
 
         # --- 3. Main Layout (Splitter) ---
         # We use QSplitter for resizable panels: [Left Sidebar] | [VTK View] | [Right Chat]
