@@ -143,6 +143,79 @@ class VTKWidget(QWidget):
             self.renderer.GradientBackgroundOff()
         self.vtkWidget.GetRenderWindow().Render()
 
+    def set_actor_representation(self, actor, style):
+        if not actor: return
+        
+        # Store style for UI properties panel
+        actor._representation_style = style
+        
+        current_mapper = actor.GetMapper()
+        data = current_mapper.GetInput()
+        prop = actor.GetProperty()
+        
+        # 1. Reset actor properties to a clean state
+        prop.SetRepresentationToSurface()
+        prop.EdgeVisibilityOff()
+        
+        # 2. Handle Mapper Swapping
+        if style == "Point Gaussian":
+            if not isinstance(current_mapper, vtk.vtkGlyph3DMapper):
+                sphere = vtk.vtkSphereSource()
+                sphere.SetThetaResolution(8)
+                sphere.SetPhiResolution(8)
+                
+                new_mapper = vtk.vtkGlyph3DMapper()
+                new_mapper.SetInputData(data)
+                new_mapper.SetSourceConnection(sphere.GetOutputPort())
+                new_mapper.SetScaleModeToNoDataScaling()
+                new_mapper.SetScaleFactor(0.05)
+                
+                actor.SetMapper(new_mapper)
+            prop.SetRepresentationToSurface()
+            self.vtkWidget.GetRenderWindow().Render()
+            return
+
+        if isinstance(current_mapper, (vtk.vtkPointGaussianMapper, vtk.vtkGlyph3DMapper)):
+            new_mapper = vtk.vtkDataSetMapper()
+            new_mapper.SetInputData(data)
+            actor.SetMapper(new_mapper)
+            
+        # 3. Apply specific styles
+        if style == "Points":
+            prop.SetRepresentationToPoints()
+            prop.SetPointSize(3.0)
+        elif style == "Wireframe":
+            prop.SetRepresentationToWireframe()
+            prop.SetLineWidth(1.0)
+        elif style == "Surface":
+            prop.SetRepresentationToSurface()
+        elif style == "Surface With Edges":
+            prop.SetRepresentationToSurface()
+            prop.EdgeVisibilityOn()
+            prop.SetLineWidth(1.0)
+            
+        self.vtkWidget.GetRenderWindow().Render()
+
+    def set_point_size(self, actor, value):
+        if not actor: return
+        actor.GetProperty().SetPointSize(value)
+        self.vtkWidget.GetRenderWindow().Render()
+
+    def set_line_width(self, actor, value):
+        if not actor: return
+        actor.GetProperty().SetLineWidth(value)
+        self.vtkWidget.GetRenderWindow().Render()
+
+    def set_gaussian_scale(self, actor, value):
+        if not actor: return
+        mapper = actor.GetMapper()
+        if hasattr(mapper, "SetScaleFactor"):
+            mapper.SetScaleFactor(value)
+            self.vtkWidget.GetRenderWindow().Render()
+
+    def get_actor_style(self, actor):
+        return getattr(actor, '_representation_style', 'Surface')
+
     def clear_scene(self):
         self.renderer.RemoveAllViewProps()
         # Re-add axes if cleared (though axes is a widget, RemoveAllViewProps usually removes actors/props)
