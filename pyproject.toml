@@ -1,6 +1,6 @@
 [project]
 name = "sa-agent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Scientific Analysis Agent with VTK and LangGraph"
 authors = [
     {name = "User", email = "user@example.com"},

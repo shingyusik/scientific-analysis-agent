@@ -1,6 +1,8 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, 
                                QPushButton, QLabel, QFileDialog, QSplitter, QTreeWidget, QTreeWidgetItem, 
-                               QTabWidget, QMenuBar, QMenu, QToolButton, QDoubleSpinBox, QSlider, QFormLayout, QGroupBox, QScrollArea, QSpinBox)
+                               QTabWidget, QMenuBar, QMenu, QToolButton, QDoubleSpinBox, QSlider, 
+                               QFormLayout, QGroupBox, QScrollArea, QSpinBox, QMessageBox, QCheckBox, QComboBox)
+import vtk
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 from app.vtk_widget import VTKWidget
@@ -47,6 +49,13 @@ class MainWindow(QMainWindow):
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
+        
+        # Filters Menu
+        self.filters_menu = menu_bar.addMenu("Filters")
+        
+        slice_action = QAction("Slice", self)
+        slice_action.triggered.connect(self.on_slice)
+        self.filters_menu.addAction(slice_action)
 
         # --- 2. Toolbar (View Controls) ---
         toolbar = self.addToolBar("View Controls")
@@ -126,7 +135,7 @@ class MainWindow(QMainWindow):
         self.pipeline_tree.itemChanged.connect(self.toggle_visibility) # Handle checkbox changes
         self.pipeline_tree.setContextMenuPolicy(Qt.CustomContextMenu) # Enable Right-click
         self.pipeline_tree.customContextMenuRequested.connect(self.show_context_menu)
-        self.pipeline_tree.itemClicked.connect(self.update_properties_panel)
+        self.pipeline_tree.itemSelectionChanged.connect(self.on_selection_changed)
         left_sidebar.addWidget(self.pipeline_tree)
         
         # 2. Properties/Information Tabs
@@ -220,39 +229,89 @@ class MainWindow(QMainWindow):
             try:
                 actor, data_obj = self.vtk_widget.render_file(file_name)
                 if actor:
-                    self.chat_display.append("System: Visualization updated.")
-                    # Add to Pipeline Tree
-                    self.add_pipeline_item(base_name, "File Source", actor, data_obj)
+                    # Add to Pipeline
+                    item = self.add_pipeline_item(base_name, "File Source", actor, data_obj)
+                    
+                    # Setup initial scalar bar if scalars exist
+                    if data_obj and (data_obj.GetPointData().GetScalars() or data_obj.GetCellData().GetScalars()):
+                        # Create default LUT for consistent visualization
+                        mapper = actor.GetMapper()
+                        if mapper:
+                            mapper.CreateDefaultLookupTable()
+                            mapper.SetScalarRange(data_obj.GetScalarRange())
+                        
+                    self.pipeline_tree.setCurrentItem(item)
+                    self.update_properties_panel(item)
+                    
+                    self.chat_display.append(f"System: Loaded {base_name}")
                 else:
                     self.chat_display.append("System: Failed to render file.")
                 
             except Exception as e:
                 self.chat_display.append(f"System: Error loading file - {e}")
 
-    def add_pipeline_item(self, name, type_desc, actor=None, data_obj=None):
-        item = QTreeWidgetItem(self.pipeline_tree)
-        item.setText(0, name)
-        item.setCheckState(0, Qt.Checked) # Checkbox for visibility
+    def on_slice(self):
+        item = self.pipeline_tree.currentItem()
+        if not item:
+            QMessageBox.warning(self, "Warning", "Please select a source in Pipeline Browser.")
+            return
+            
+        parent_data = item.data(0, Qt.UserRole + 3) # We'll store data_obj in Role+3
+        if not parent_data: return
         
-        # Information extraction (Using Python VTK API for now due to missing C++ headers in project)
+        # Use C++ Engine to apply slice
+        center = parent_data.GetCenter()
+        sliced_data = self.engine.apply_slice(parent_data, center[0], center[1], center[2], 1, 0, 0)
+        
+        if sliced_data:
+            # Create mapper/actor for result
+            mapper = vtk.vtkPolyDataMapper()
+            mapper.SetInputData(sliced_data)
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(1, 1, 1) # Default white for slice
+            
+            self.vtk_widget.renderer.AddActor(actor)
+            self.vtk_widget.vtkWidget.GetRenderWindow().Render()
+            
+            slice_item = self.add_pipeline_item(f"Slice ({item.text(0)})", "Slice Filter", actor, sliced_data, parent=item)
+            slice_item.setData(0, Qt.UserRole + 4, center)
+            slice_item.setData(0, Qt.UserRole + 5, [1, 0, 0])
+            self.update_properties_panel(slice_item) # Refresh with parameters
+            self.chat_display.append(f"System: [C++ Engine] Applied Slice filter to {item.text(0)}.")
+
+    def add_pipeline_item(self, name, type_desc, actor=None, data_obj=None, parent=None):
+        if parent:
+            item = QTreeWidgetItem(parent)
+            parent.setExpanded(True)
+        else:
+            item = QTreeWidgetItem(self.pipeline_tree)
+            
+        item.setText(0, name)
+        item.setCheckState(0, Qt.Checked)
+        
+        # Information extraction using C++ Engine
         info_str = "No data object."
         if data_obj:
             try:
-                pts = data_obj.GetNumberOfPoints()
-                cells = data_obj.GetNumberOfCells()
-                bounds = data_obj.GetBounds()
-                bounds_str = f"[{bounds[0]:.2f}, {bounds[1]:.2f}] x [{bounds[2]:.2f}, {bounds[3]:.2f}] x [{bounds[4]:.2f}, {bounds[5]:.2f}]"
+                # Call C++ engine to get info map
+                engine_info = self.engine.get_data_info(data_obj)
                 
-                pt_arrays = [data_obj.GetPointData().GetArrayName(i) for i in range(data_obj.GetPointData().GetNumberOfArrays())]
-                cell_arrays = [data_obj.GetCellData().GetArrayName(i) for i in range(data_obj.GetCellData().GetNumberOfArrays())]
+                # Format into a string for display
+                lines = []
+                for k, v in engine_info.items():
+                    lines.append(f"{k}: {v}")
                 
-                info_str = (
-                    f"Points: {pts}\n"
-                    f"Cells: {cells}\n"
-                    f"Bounds: {bounds_str}\n"
-                    f"Point Arrays: {', '.join(pt_arrays) if pt_arrays else 'None'}\n"
-                    f"Cell Arrays: {', '.join(cell_arrays) if cell_arrays else 'None'}"
-                )
+                # Still add array info from Python for now as it's easier to list
+                pt_data = data_obj.GetPointData()
+                cell_data = data_obj.GetCellData()
+                pt_arrays = [pt_data.GetArrayName(i) for i in range(pt_data.GetNumberOfArrays())]
+                cell_arrays = [cell_data.GetArrayName(i) for i in range(cell_data.GetNumberOfArrays())]
+                
+                lines.append(f"Point Arrays: {', '.join(pt_arrays) if pt_arrays else 'None'}")
+                lines.append(f"Cell Arrays: {', '.join(cell_arrays) if cell_arrays else 'None'}")
+                
+                info_str = "\n".join(lines)
             except Exception as e:
                 info_str = f"Error extracting info: {e}"
 
@@ -260,15 +319,24 @@ class MainWindow(QMainWindow):
         item.setData(0, Qt.UserRole, actor)
         item.setData(0, Qt.UserRole + 1, type_desc)
         item.setData(0, Qt.UserRole + 2, info_str)
+        item.setData(0, Qt.UserRole + 3, data_obj)
         
-        self.pipeline_tree.setCurrentItem(item)
+        if not parent:
+            self.pipeline_tree.setCurrentItem(item)
         self.update_properties_panel(item)
+        return item
 
     def toggle_visibility(self, item, column):
         actor = item.data(0, Qt.UserRole)
-        if actor:
-            visible = (item.checkState(0) == Qt.Checked)
-            self.vtk_widget.set_actor_visibility(actor, visible)
+        visible = (item.checkState(0) == Qt.Checked)
+        self.vtk_widget.set_actor_visibility(actor, visible)
+        
+        # If hiding the currently selected item, hide the scalar bar too
+        if not visible and item == self.pipeline_tree.currentItem():
+            self.vtk_widget.hide_scalar_bar()
+        # If showing and it is selected, try to show scalar bar
+        elif visible and item == self.pipeline_tree.currentItem():
+            self.update_properties_panel(item)
 
     def change_selected_representation(self, style):
         item = self.pipeline_tree.currentItem()
@@ -294,13 +362,34 @@ class MainWindow(QMainWindow):
             self.delete_item(item)
 
     def delete_item(self, item):
-        actor = item.data(0, Qt.UserRole)
-        if actor:
-            self.vtk_widget.remove_actor(actor)
-        index = self.pipeline_tree.indexOfTopLevelItem(item)
-        self.pipeline_tree.takeTopLevelItem(index)
+        # 1. Recursive helper to remove actors of this item and all its children
+        def remove_actors_recursive(target_item):
+            # Remove this item's actor
+            actor = target_item.data(0, Qt.UserRole)
+            if actor:
+                self.vtk_widget.remove_actor(actor)
+            
+            # Recursively handle children
+            for i in range(target_item.childCount()):
+                remove_actors_recursive(target_item.child(i))
+
+        # 2. Perform actor removal
+        remove_actors_recursive(item)
+        self.vtk_widget.hide_slice_preview() # Safety: hide preview if it was active
+        
+        # 3. Remove from Tree
+        parent = item.parent()
+        if parent:
+            parent.removeChild(item)
+        else:
+            index = self.pipeline_tree.indexOfTopLevelItem(item)
+            if index != -1:
+                self.pipeline_tree.takeTopLevelItem(index)
+        
+        # 4. UI cleanup
         self.update_properties_panel(None)
         self.info_page.setPlainText("")
+        self.vtk_widget.vtkWidget.GetRenderWindow().Render()
 
     def update_properties_panel(self, item):
         # Clear existing controls
@@ -312,6 +401,7 @@ class MainWindow(QMainWindow):
         if not item:
             self.properties_layout.addWidget(QLabel("No item selected."))
             self.info_page.setPlainText("")
+            self.vtk_widget.hide_slice_preview()
             return
             
         name = item.text(0)
@@ -325,9 +415,95 @@ class MainWindow(QMainWindow):
         
         if not actor: 
             self.properties_layout.addWidget(QLabel("No styling properties available for this source."))
+            self.vtk_widget.hide_scalar_bar()
             return
+
+        # 0. Color By Control
+        mapper = actor.GetMapper()
+        data = mapper.GetInput() if mapper else None
         
-        # 1. Styling Controls
+        if data:
+            # Collect arrays
+            arrays = [] # list of (name, type)
+            pd = data.GetPointData()
+            for i in range(pd.GetNumberOfArrays()):
+                name = pd.GetArrayName(i)
+                if name: arrays.append((name, 'POINT'))
+                
+            cd = data.GetCellData()
+            for i in range(cd.GetNumberOfArrays()):
+                name = cd.GetArrayName(i)
+                if name: arrays.append((name, 'CELL'))
+            
+            # Only show if there are arrays
+            if arrays:
+                color_layout = QHBoxLayout()
+                color_group = QGroupBox("Color By")
+                color_inner_layout = QVBoxLayout(color_group)
+                
+                combo = QComboBox()
+                combo.addItem("Solid Color", "__SolidColor__")
+                
+                current_array = mapper.GetArrayName()
+                current_idx = 0
+                
+                for idx, (name, type_) in enumerate(arrays):
+                    combo.addItem(f"{name} ({type_})", (name, type_))
+                    # Check if currently selected
+                    if mapper.GetScalarVisibility() and name == current_array:
+                        current_idx = idx + 1
+                        
+                combo.setCurrentIndex(current_idx)
+                
+                def on_color_change(idx):
+                    data_val = combo.itemData(idx)
+                    if data_val == "__SolidColor__":
+                        self.vtk_widget.set_color_by(actor, "__SolidColor__")
+                    else:
+                        limit_name, limit_type = data_val
+                        self.vtk_widget.set_color_by(actor, limit_name, limit_type)
+                        
+                combo.currentIndexChanged.connect(on_color_change)
+                
+                color_inner_layout.addWidget(combo)
+                self.properties_layout.addWidget(color_group)
+
+        # Update Scalar Bar (Legend) based on current state (redundant check but keeps consistency)
+        has_scalars = False
+        if mapper and mapper.GetScalarVisibility():
+             has_scalars = True
+        
+        if has_scalars and mapper.GetScalarVisibility():
+            # Only show if visibility is ON. 
+            # Do NOT pass title=name, let vtk_widget figure out the variable name.
+            self.vtk_widget.update_scalar_bar(actor)
+        else:
+            self.vtk_widget.hide_scalar_bar()
+        
+        # 1. Action Button (Apply) - Only for Filters
+        if "Filter" in type_desc:
+            apply_btn = QPushButton("Apply")
+            # Using a more prominent styling for the main action button
+            apply_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #2c3e50; 
+                    color: white; 
+                    font-weight: bold; 
+                    padding: 10px; 
+                    border-radius: 4px;
+                }
+                QPushButton:hover {
+                    background-color: #34495e;
+                }
+                QPushButton:pressed {
+                    background-color: #1a252f;
+                }
+            """)
+            apply_btn.setCursor(Qt.PointingHandCursor)
+            apply_btn.clicked.connect(lambda: self.commit_filter_changes(item))
+            self.properties_layout.addWidget(apply_btn)
+
+        # 2. Styling Controls
         style = self.vtk_widget.get_actor_style(actor)
         style_group = QGroupBox(f"Styling: {style}")
         style_layout = QFormLayout(style_group)
@@ -411,8 +587,99 @@ class MainWindow(QMainWindow):
             row_layout.addWidget(scale_spin)
             row_layout.addWidget(reset_btn)
             style_layout.addRow("Sphere Radius:", row_layout)
-        else:
-            style_layout.addRow(QLabel("No editable properties for this style."))
             
         self.properties_layout.addWidget(style_group)
+        
+        # 3. Filter Specific Controls
+        if "Filter" in type_desc:
+            filter_group = QGroupBox("Filter Parameters")
+            filter_layout = QFormLayout(filter_group)
+            
+            if "Slice" in type_desc:
+                # Origin
+                origin = item.data(0, Qt.UserRole + 4) or [0, 0, 0]
+                for i, label in enumerate(["Origin X", "Origin Y", "Origin Z"]):
+                    spin = ScientificDoubleSpinBox()
+                    spin.setValue(origin[i])
+                    # Use index closure for lambda
+                    spin.valueChanged.connect(lambda v, idx=i: self.update_slice_params(item, 'origin', idx, v))
+                    filter_layout.addRow(label, spin)
+                
+                # Preview Toggle
+                show_plane_cb = QCheckBox("Show Plane")
+                preview_visible = item.data(0, Qt.UserRole + 6)
+                if preview_visible is None: preview_visible = True # Default to on
+                show_plane_cb.setChecked(preview_visible)
+                show_plane_cb.toggled.connect(lambda v: self.toggle_slice_preview(item, v))
+                filter_layout.addRow("", show_plane_cb)
+                
+                # Normal
+                normal = item.data(0, Qt.UserRole + 5) or [1, 0, 0]
+                for i, label in enumerate(["Normal X", "Normal Y", "Normal Z"]):
+                    spin = ScientificDoubleSpinBox()
+                    spin.setRange(-1, 1) # Normal is typical -1 to 1
+                    spin.setValue(normal[i])
+                    spin.valueChanged.connect(lambda v, idx=i: self.update_slice_params(item, 'normal', idx, v))
+                    filter_layout.addRow(label, spin)
+            
+            self.properties_layout.addWidget(filter_group)
+            
+            # If it's a slice, show initial preview
+            if "Slice" in type_desc:
+                self.update_slice_preview(item)
+            
+        else:
+            self.vtk_widget.hide_slice_preview()
+            
         self.properties_layout.addStretch() # Push everything to top
+
+    def on_selection_changed(self):
+        item = self.pipeline_tree.currentItem()
+        self.update_properties_panel(item)
+
+    def update_slice_preview(self, item):
+        parent_item = item.parent()
+        if not parent_item: return
+        parent_data = parent_item.data(0, Qt.UserRole + 3)
+        origin = item.data(0, Qt.UserRole + 4)
+        normal = item.data(0, Qt.UserRole + 5)
+        preview_visible = item.data(0, Qt.UserRole + 6)
+        if preview_visible is None: preview_visible = True
+
+        if preview_visible and parent_data and origin and normal:
+            self.vtk_widget.update_slice_preview(origin, normal, parent_data.GetBounds())
+        else:
+            self.vtk_widget.hide_slice_preview()
+
+    def toggle_slice_preview(self, item, visible):
+        item.setData(0, Qt.UserRole + 6, visible)
+        self.update_slice_preview(item)
+
+    def update_slice_params(self, item, param_type, index, value):
+        # Update roles only, show preview
+        origin = list(item.data(0, Qt.UserRole + 4) or [0,0,0])
+        normal = list(item.data(0, Qt.UserRole + 5) or [1,0,0])
+        
+        if param_type == 'origin': origin[index] = value
+        else: normal[index] = value
+        
+        item.setData(0, Qt.UserRole + 4, origin)
+        item.setData(0, Qt.UserRole + 5, normal)
+        self.update_slice_preview(item)
+
+    def commit_filter_changes(self, item):
+        actor = item.data(0, Qt.UserRole)
+        type_desc = item.data(0, Qt.UserRole + 1)
+        parent_item = item.parent()
+        if not parent_item: return
+        parent_data = parent_item.data(0, Qt.UserRole + 3)
+        
+        if "Slice" in type_desc:
+            origin = item.data(0, Qt.UserRole + 4)
+            normal = item.data(0, Qt.UserRole + 5)
+            self.chat_display.append(f"System: [C++ Engine] Recalculating Slice...")
+            sliced_data = self.engine.apply_slice(parent_data, origin[0], origin[1], origin[2], normal[0], normal[1], normal[2])
+            actor.GetMapper().SetInputData(sliced_data)
+            
+        self.vtk_widget.vtkWidget.GetRenderWindow().Render()
+        self.chat_display.append(f"System: Filter applied.")
