@@ -213,6 +213,11 @@ class VTKWidget(QWidget):
             mapper.SetScaleFactor(value)
             self.vtkWidget.GetRenderWindow().Render()
 
+    def set_actor_opacity(self, actor, value):
+        if not actor: return
+        actor.GetProperty().SetOpacity(value)
+        self.vtkWidget.GetRenderWindow().Render()
+
     def get_actor_style(self, actor):
         return getattr(actor, '_representation_style', 'Surface')
 
