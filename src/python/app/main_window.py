@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QLineEdit, 
                                QPushButton, QLabel, QFileDialog, QSplitter, QTreeWidget, QTreeWidgetItem, 
-                               QTabWidget, QMenuBar, QMenu, QToolButton, QDoubleSpinBox, QSlider, QFormLayout, QGroupBox, QScrollArea)
+                               QTabWidget, QMenuBar, QMenu, QToolButton, QDoubleSpinBox, QSlider, QFormLayout, QGroupBox, QScrollArea, QSpinBox)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 from app.vtk_widget import VTKWidget
@@ -310,6 +310,41 @@ class MainWindow(QMainWindow):
         style = self.vtk_widget.get_actor_style(actor)
         style_group = QGroupBox(f"Styling: {style}")
         style_layout = QFormLayout(style_group)
+        
+        # Opacity Control (Common for all styles)
+        opacity_layout = QHBoxLayout()
+        opacity_slider = QSlider(Qt.Horizontal)
+        opacity_slider.setRange(0, 100)
+        current_opacity = int(actor.GetProperty().GetOpacity() * 100)
+        opacity_slider.setValue(current_opacity)
+        
+        opacity_spin = QSpinBox()
+        opacity_spin.setRange(0, 100)
+        opacity_spin.setSuffix("%")
+        opacity_spin.setValue(current_opacity)
+        
+        def update_opacity(val):
+            # Ensure val is treated as int, though QSpinBox and QSlider provide ints
+            int_val = int(val) 
+            self.vtk_widget.set_actor_opacity(actor, int_val / 100.0)
+            opacity_slider.blockSignals(True)
+            opacity_slider.setValue(int_val)
+            opacity_slider.blockSignals(False)
+            opacity_spin.blockSignals(True)
+            opacity_spin.setValue(int_val)
+            opacity_spin.blockSignals(False)
+            
+        opacity_slider.valueChanged.connect(update_opacity)
+        opacity_spin.valueChanged.connect(update_opacity)
+        
+        opacity_reset = QPushButton("Reset")
+        opacity_reset.setFixedWidth(50)
+        opacity_reset.clicked.connect(lambda: update_opacity(100))
+        
+        opacity_layout.addWidget(opacity_slider)
+        opacity_layout.addWidget(opacity_spin)
+        opacity_layout.addWidget(opacity_reset)
+        style_layout.addRow("Opacity:", opacity_layout)
         
         if style == "Points":
             size_spin = QDoubleSpinBox()
