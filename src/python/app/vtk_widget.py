@@ -161,6 +161,7 @@ class VTKWidget(QWidget):
         if style == "Point Gaussian":
             if not isinstance(current_mapper, vtk.vtkGlyph3DMapper):
                 sphere = vtk.vtkSphereSource()
+                sphere.SetRadius(1.0) # Set base radius to 1.0 so ScaleFactor = Radius
                 sphere.SetThetaResolution(8)
                 sphere.SetPhiResolution(8)
                 
