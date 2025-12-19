@@ -311,22 +311,23 @@ class MainWindow(QMainWindow):
         
         if not item:
             self.properties_layout.addWidget(QLabel("No item selected."))
+            self.info_page.setPlainText("")
             return
             
         name = item.text(0)
         actor = item.data(0, Qt.UserRole)
         type_desc = item.data(0, Qt.UserRole + 1)
+        info_str = item.data(0, Qt.UserRole + 2)
         
-        # 1. Header Information
-        header_group = QGroupBox("Target Information")
-        header_layout = QFormLayout(header_group)
-        header_layout.addRow("Name:", QLabel(name))
-        header_layout.addRow("Type:", QLabel(type_desc))
-        self.properties_layout.addWidget(header_group)
+        # Update Information Page (Includes Name and Type now)
+        full_info = f"Name: {name}\nType: {type_desc}\n\n{info_str if info_str else ''}"
+        self.info_page.setPlainText(full_info)
         
-        if not actor: return
+        if not actor: 
+            self.properties_layout.addWidget(QLabel("No styling properties available for this source."))
+            return
         
-        # 2. Representation Specific Controls
+        # 1. Styling Controls
         style = self.vtk_widget.get_actor_style(actor)
         style_group = QGroupBox(f"Styling: {style}")
         style_layout = QFormLayout(style_group)
