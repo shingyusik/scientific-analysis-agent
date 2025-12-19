@@ -181,10 +181,13 @@ class MainWindow(QMainWindow):
         
         main_splitter.addWidget(right_panel)
         
-        # Set initial stretch factors (Sidebar: 15%, VTK: 60%, Chat: 25%)
-        main_splitter.setStretchFactor(0, 1)
+        # Set initial stretch factors (Sidebar: ~22%, VTK: ~55%, Chat: ~22%)
+        main_splitter.setStretchFactor(0, 2)
         main_splitter.setStretchFactor(1, 5)
         main_splitter.setStretchFactor(2, 2)
+        
+        # Set explicit initial widths in pixels
+        main_splitter.setSizes([350, 750, 300])
         
         # Initialize Engine
         if sa_engine:
