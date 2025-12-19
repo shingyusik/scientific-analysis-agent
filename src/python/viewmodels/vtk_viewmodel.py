@@ -1,0 +1,105 @@
+from PySide6.QtCore import QObject, Signal
+from typing import Tuple, List, Any, Optional
+from services.vtk_render_service import VTKRenderService
+
+
+class VTKViewModel(QObject):
+    """ViewModel for VTK viewer state management."""
+    
+    render_requested = Signal()
+    background_changed = Signal(tuple, object)  # (color1, color2 or None)
+    camera_reset_requested = Signal()
+    view_plane_requested = Signal(str)  # "xy", "yz", "xz"
+    actor_added = Signal(object)  # actor
+    actor_removed = Signal(object)  # actor
+    slice_preview_requested = Signal(list, list, tuple)  # origin, normal, bounds
+    slice_preview_hide_requested = Signal()
+    scalar_bar_update_requested = Signal(object)  # actor
+    scalar_bar_hide_requested = Signal()
+    
+    BACKGROUND_PRESETS = [
+        ("Warm Gray (Default)", (0.32, 0.34, 0.43), None),
+        ("Blue Gray", (0.2, 0.3, 0.4), None),
+        ("Dark Gray", (0.1, 0.1, 0.1), None),
+        ("Neutral Gray", (0.5, 0.5, 0.5), None),
+        ("Light Gray", (0.8, 0.8, 0.8), None),
+        ("White", (1.0, 1.0, 1.0), None),
+        ("Black", (0.0, 0.0, 0.0), None),
+        ("Gradient Background", (0.32, 0.34, 0.43), (0.0, 0.0, 0.0)),
+    ]
+    
+    REPRESENTATION_STYLES = ["Points", "Point Gaussian", "Wireframe", "Surface", "Surface With Edges"]
+    
+    def __init__(self, render_service: VTKRenderService):
+        super().__init__()
+        self._render_service = render_service
+        self._current_background = self.BACKGROUND_PRESETS[0]
+    
+    @property
+    def render_service(self) -> VTKRenderService:
+        return self._render_service
+    
+    def set_background(self, color1: Tuple[float, float, float], 
+                       color2: Tuple[float, float, float] = None) -> None:
+        """Set background color."""
+        self._current_background = ("Custom", color1, color2)
+        self.background_changed.emit(color1, color2)
+    
+    def set_background_preset(self, preset_name: str) -> None:
+        """Set background from preset."""
+        for name, c1, c2 in self.BACKGROUND_PRESETS:
+            if name == preset_name:
+                self._current_background = (name, c1, c2)
+                self.background_changed.emit(c1, c2)
+                break
+    
+    def reset_camera(self) -> None:
+        """Request camera reset."""
+        self.camera_reset_requested.emit()
+    
+    def set_view_plane(self, plane: str) -> None:
+        """Request view plane change."""
+        if plane in ("xy", "yz", "xz"):
+            self.view_plane_requested.emit(plane)
+    
+    def add_actor(self, actor: Any) -> None:
+        """Request actor to be added to renderer."""
+        self.actor_added.emit(actor)
+        self.render_requested.emit()
+    
+    def remove_actor(self, actor: Any) -> None:
+        """Request actor to be removed from renderer."""
+        self.actor_removed.emit(actor)
+        self.render_requested.emit()
+    
+    def request_render(self) -> None:
+        """Request a render update."""
+        self.render_requested.emit()
+    
+    def show_slice_preview(self, origin: List[float], normal: List[float], 
+                           bounds: Tuple[float, ...]) -> None:
+        """Request slice preview display."""
+        self.slice_preview_requested.emit(origin, normal, bounds)
+    
+    def hide_slice_preview(self) -> None:
+        """Request to hide slice preview."""
+        self.slice_preview_hide_requested.emit()
+    
+    def update_scalar_bar(self, actor: Any) -> None:
+        """Request scalar bar update for actor."""
+        self.scalar_bar_update_requested.emit(actor)
+    
+    def hide_scalar_bar(self) -> None:
+        """Request to hide scalar bar."""
+        self.scalar_bar_hide_requested.emit()
+    
+    def get_representation_style(self, actor: Any) -> str:
+        """Get actor's current representation style."""
+        return self._render_service.get_representation_style(actor)
+    
+    def get_data_arrays(self, data: Any) -> List[Tuple[str, str]]:
+        """Get available data arrays."""
+        if data:
+            return self._render_service.get_data_arrays(data)
+        return []
+

@@ -1,0 +1,356 @@
+from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
+                               QMenu, QToolButton, QFileDialog)
+from PySide6.QtGui import QAction
+from PySide6.QtCore import Qt
+
+from views.vtk_widget import VTKWidget
+from views.pipeline_browser import PipelineBrowserWidget
+from views.properties_panel import PropertiesPanel
+from views.chat_panel import ChatPanel
+from viewmodels.pipeline_viewmodel import PipelineViewModel
+from viewmodels.vtk_viewmodel import VTKViewModel
+from viewmodels.chat_viewmodel import ChatViewModel
+from models.filter_params import SliceParams
+
+
+class MainWindow(QMainWindow):
+    """Main application window - orchestrates views and viewmodels."""
+    
+    def __init__(self, pipeline_vm: PipelineViewModel, vtk_vm: VTKViewModel, chat_vm: ChatViewModel):
+        super().__init__()
+        self._pipeline_vm = pipeline_vm
+        self._vtk_vm = vtk_vm
+        self._chat_vm = chat_vm
+        
+        self.setWindowTitle("Scientific Analysis Agent")
+        self.resize(1400, 900)
+        
+        self._setup_menu_bar()
+        self._setup_toolbar()
+        self._setup_main_layout()
+        self._connect_signals()
+        self._initialize()
+    
+    def _setup_menu_bar(self) -> None:
+        """Setup the menu bar."""
+        menu_bar = self.menuBar()
+        
+        file_menu = menu_bar.addMenu("File")
+        
+        load_action = QAction("Load Data...", self)
+        load_action.setShortcut("Ctrl+O")
+        load_action.triggered.connect(self._on_load_file)
+        file_menu.addAction(load_action)
+        
+        exit_action = QAction("Exit", self)
+        exit_action.setShortcut("Ctrl+Q")
+        exit_action.triggered.connect(self.close)
+        file_menu.addAction(exit_action)
+        
+        filters_menu = menu_bar.addMenu("Filters")
+        
+        slice_action = QAction("Slice", self)
+        slice_action.triggered.connect(self._on_slice)
+        filters_menu.addAction(slice_action)
+    
+    def _setup_toolbar(self) -> None:
+        """Setup the toolbar."""
+        toolbar = self.addToolBar("View Controls")
+        
+        action_reset = toolbar.addAction("Home (Reset)")
+        action_reset.triggered.connect(lambda: self._vtk_widget.reset_camera())
+        
+        toolbar.addSeparator()
+        
+        action_xy = toolbar.addAction("XY Plane")
+        action_xy.triggered.connect(lambda: self._vtk_widget.set_view_xy())
+        
+        action_yz = toolbar.addAction("YZ Plane")
+        action_yz.triggered.connect(lambda: self._vtk_widget.set_view_yz())
+        
+        action_xz = toolbar.addAction("XZ Plane")
+        action_xz.triggered.connect(lambda: self._vtk_widget.set_view_xz())
+        
+        toolbar.addSeparator()
+        
+        self._setup_background_menu(toolbar)
+        self._setup_representation_menu(toolbar)
+    
+    def _setup_background_menu(self, toolbar) -> None:
+        """Setup background color dropdown."""
+        bg_btn = QToolButton()
+        bg_btn.setText("Background")
+        bg_btn.setPopupMode(QToolButton.InstantPopup)
+        bg_btn.setStyleSheet(
+            "QToolButton { padding-right: 15px; } "
+            "QToolButton::menu-indicator { subcontrol-origin: padding; subcontrol-position: center right; }"
+        )
+        
+        bg_menu = QMenu(self)
+        for name, c1, c2 in self._vtk_vm.BACKGROUND_PRESETS:
+            action = bg_menu.addAction(name)
+            action.triggered.connect(
+                lambda checked=False, col1=c1, col2=c2: self._vtk_widget.set_background(col1, col2)
+            )
+        
+        bg_btn.setMenu(bg_menu)
+        toolbar.addWidget(bg_btn)
+    
+    def _setup_representation_menu(self, toolbar) -> None:
+        """Setup representation style dropdown."""
+        rep_btn = QToolButton()
+        rep_btn.setText("Representation")
+        rep_btn.setPopupMode(QToolButton.InstantPopup)
+        rep_btn.setStyleSheet(
+            "QToolButton { padding-right: 15px; } "
+            "QToolButton::menu-indicator { subcontrol-origin: padding; subcontrol-position: center right; }"
+        )
+        
+        rep_menu = QMenu(self)
+        for style in self._vtk_vm.REPRESENTATION_STYLES:
+            action = rep_menu.addAction(style)
+            action.triggered.connect(
+                lambda checked=False, s=style: self._on_representation_changed(s)
+            )
+        
+        rep_btn.setMenu(rep_menu)
+        toolbar.addWidget(rep_btn)
+    
+    def _setup_main_layout(self) -> None:
+        """Setup the main layout with splitters."""
+        main_splitter = QSplitter(Qt.Horizontal)
+        self.setCentralWidget(main_splitter)
+        
+        left_sidebar = QSplitter(Qt.Vertical)
+        
+        self._pipeline_browser = PipelineBrowserWidget()
+        left_sidebar.addWidget(self._pipeline_browser)
+        
+        self._details_tabs = QTabWidget()
+        
+        self._properties_panel = PropertiesPanel()
+        self._details_tabs.addTab(self._properties_panel, "Properties")
+        
+        self._info_page = QTextEdit()
+        self._info_page.setReadOnly(True)
+        self._details_tabs.addTab(self._info_page, "Information")
+        
+        left_sidebar.addWidget(self._details_tabs)
+        left_sidebar.setStretchFactor(0, 1)
+        left_sidebar.setStretchFactor(1, 1)
+        
+        main_splitter.addWidget(left_sidebar)
+        
+        self._vtk_widget = VTKWidget()
+        main_splitter.addWidget(self._vtk_widget)
+        
+        self._chat_panel = ChatPanel()
+        main_splitter.addWidget(self._chat_panel)
+        
+        main_splitter.setStretchFactor(0, 2)
+        main_splitter.setStretchFactor(1, 5)
+        main_splitter.setStretchFactor(2, 2)
+        main_splitter.setSizes([350, 750, 300])
+    
+    def _connect_signals(self) -> None:
+        """Connect all signals between views and viewmodels."""
+        self._pipeline_vm.item_added.connect(self._on_item_added)
+        self._pipeline_vm.item_removed.connect(self._on_item_removed)
+        self._pipeline_vm.item_updated.connect(self._on_item_updated)
+        self._pipeline_vm.selection_changed.connect(self._on_selection_changed)
+        self._pipeline_vm.message.connect(self._on_message)
+        
+        self._pipeline_browser.item_selected.connect(self._on_browser_selection)
+        self._pipeline_browser.item_visibility_changed.connect(self._on_visibility_changed)
+        self._pipeline_browser.item_delete_requested.connect(self._on_delete_requested)
+        
+        self._properties_panel.apply_filter_requested.connect(self._pipeline_vm.commit_filter)
+        self._properties_panel.opacity_changed.connect(self._on_opacity_changed)
+        self._properties_panel.point_size_changed.connect(self._pipeline_vm.set_point_size)
+        self._properties_panel.line_width_changed.connect(self._pipeline_vm.set_line_width)
+        self._properties_panel.gaussian_scale_changed.connect(self._pipeline_vm.set_gaussian_scale)
+        self._properties_panel.color_by_changed.connect(self._on_color_by_changed)
+        self._properties_panel.slice_params_changed.connect(self._on_slice_params_changed)
+        
+        self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
+        self._chat_vm.message_added.connect(
+            lambda msg: self._chat_panel.append_message(msg.sender, msg.content)
+        )
+    
+    def _initialize(self) -> None:
+        """Initialize the application state."""
+        engine = self._vtk_vm.render_service.engine
+        if engine:
+            msg = engine.greet("User")
+            self._chat_vm.add_system_message(msg)
+        else:
+            self._chat_vm.add_system_message("Warning - sa_engine not available.")
+        
+        self._vtk_widget.clear_scene()
+        item = self._pipeline_vm.create_cone_source()
+        self._vtk_widget.add_actor(item.actor)
+        self._vtk_widget.reset_camera()
+    
+    def _on_load_file(self) -> None:
+        """Handle file load action."""
+        file_name, _ = QFileDialog.getOpenFileName(
+            self, "Load Data", "", "VTK Files (*.vtu *.vti *.vtk)"
+        )
+        if file_name:
+            item = self._pipeline_vm.load_file(file_name)
+            if item:
+                self._vtk_widget.add_actor(item.actor)
+                self._vtk_widget.reset_camera()
+                self._pipeline_vm.select_item(item.id)
+    
+    def _on_slice(self) -> None:
+        """Handle slice filter action."""
+        selected = self._pipeline_vm.selected_item
+        if not selected:
+            self._chat_vm.add_system_message("Please select a source in Pipeline Browser.")
+            return
+        
+        item = self._pipeline_vm.apply_slice(selected.id)
+        if item:
+            self._vtk_widget.add_actor(item.actor)
+            self._vtk_widget.render()
+            self._pipeline_vm.select_item(item.id)
+    
+    def _on_representation_changed(self, style: str) -> None:
+        """Handle representation style change."""
+        selected = self._pipeline_vm.selected_item
+        if selected:
+            self._pipeline_vm.set_representation(selected.id, style)
+            self._update_properties_panel(selected)
+            self._vtk_widget.render()
+    
+    def _on_item_added(self, item) -> None:
+        """Handle item added to pipeline."""
+        self._pipeline_browser.add_item(item)
+    
+    def _on_item_removed(self, item_id: str) -> None:
+        """Handle item removed from pipeline."""
+        item = self._pipeline_vm.items.get(item_id)
+        if item and item.actor:
+            self._vtk_widget.remove_actor(item.actor)
+        self._pipeline_browser.remove_item(item_id)
+        self._vtk_widget.hide_slice_preview()
+    
+    def _on_item_updated(self, item) -> None:
+        """Handle item update."""
+        self._pipeline_browser.update_item(item)
+        if item == self._pipeline_vm.selected_item:
+            self._update_properties_panel(item)
+        self._vtk_widget.render()
+    
+    def _on_selection_changed(self, item) -> None:
+        """Handle selection change."""
+        if item:
+            self._update_properties_panel(item)
+            self._info_page.setPlainText(item.get_info_string())
+        else:
+            self._properties_panel.set_item(None)
+            self._info_page.setPlainText("")
+            self._vtk_widget.hide_slice_preview()
+            self._vtk_widget.hide_scalar_bar()
+    
+    def _on_browser_selection(self, item_id: str) -> None:
+        """Handle browser selection."""
+        self._pipeline_vm.select_item(item_id if item_id else None)
+    
+    def _on_visibility_changed(self, item_id: str, visible: bool) -> None:
+        """Handle visibility toggle."""
+        self._pipeline_vm.set_visibility(item_id, visible)
+        item = self._pipeline_vm.items.get(item_id)
+        if item and item.actor:
+            self._vtk_widget.set_actor_visibility(item.actor, visible)
+            
+            if not visible and item == self._pipeline_vm.selected_item:
+                self._vtk_widget.hide_scalar_bar()
+    
+    def _on_delete_requested(self, item_id: str) -> None:
+        """Handle delete request."""
+        item = self._pipeline_vm.items.get(item_id)
+        if item and item.actor:
+            self._vtk_widget.remove_actor(item.actor)
+        self._pipeline_vm.delete_item(item_id)
+        self._vtk_widget.hide_slice_preview()
+    
+    def _on_opacity_changed(self, item_id: str, value: float) -> None:
+        """Handle opacity change."""
+        self._pipeline_vm.set_opacity(item_id, value)
+        self._vtk_widget.render()
+    
+    def _on_color_by_changed(self, item_id: str, array_name: str, array_type: str) -> None:
+        """Handle color by change."""
+        self._pipeline_vm.set_color_by(item_id, array_name, array_type)
+        
+        item = self._pipeline_vm.items.get(item_id)
+        if item and item.actor:
+            mapper = item.actor.GetMapper()
+            if array_name == "__SolidColor__" or not mapper.GetScalarVisibility():
+                self._vtk_widget.hide_scalar_bar()
+            else:
+                self._vtk_widget.update_scalar_bar(item.actor)
+        
+        self._vtk_widget.render()
+    
+    def _on_slice_params_changed(self, item_id: str, origin: list, normal: list, show_preview: bool) -> None:
+        """Handle slice parameter change."""
+        self._pipeline_vm.update_slice_params(item_id, origin, normal, show_preview)
+        
+        item = self._pipeline_vm.items.get(item_id)
+        parent = self._pipeline_vm.get_parent_item(item_id)
+        
+        if show_preview and parent and parent.vtk_data:
+            bounds = parent.vtk_data.GetBounds()
+            self._vtk_widget.update_slice_preview(origin, normal, bounds)
+        else:
+            self._vtk_widget.hide_slice_preview()
+    
+    def _on_message(self, message: str) -> None:
+        """Handle status message."""
+        self._chat_vm.add_system_message(message)
+    
+    def _update_properties_panel(self, item) -> None:
+        """Update properties panel for item."""
+        if not item:
+            self._properties_panel.set_item(None)
+            self._vtk_widget.hide_scalar_bar()
+            self._vtk_widget.hide_slice_preview()
+            return
+        
+        style = "Surface"
+        data_arrays = []
+        current_array = None
+        scalar_visible = False
+        
+        if item.actor:
+            style = self._vtk_vm.get_representation_style(item.actor)
+            
+            if item.vtk_data:
+                data_arrays = self._vtk_vm.get_data_arrays(item.vtk_data)
+            
+            mapper = item.actor.GetMapper()
+            if mapper:
+                current_array = mapper.GetArrayName()
+                scalar_visible = mapper.GetScalarVisibility()
+        
+        self._properties_panel.set_item(item, style, data_arrays, current_array, scalar_visible)
+        
+        if item.actor and scalar_visible:
+            self._vtk_widget.update_scalar_bar(item.actor)
+        else:
+            self._vtk_widget.hide_scalar_bar()
+        
+        if item.item_type == "slice_filter":
+            params = SliceParams.from_dict(item.filter_params)
+            parent = self._pipeline_vm.get_parent_item(item.id)
+            if params.show_preview and parent and parent.vtk_data:
+                bounds = parent.vtk_data.GetBounds()
+                self._vtk_widget.update_slice_preview(params.origin, params.normal, bounds)
+            else:
+                self._vtk_widget.hide_slice_preview()
+        else:
+            self._vtk_widget.hide_slice_preview()
+

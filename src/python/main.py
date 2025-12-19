@@ -1,18 +1,32 @@
 import sys
 import os
-from PySide6.QtWidgets import QApplication
-from app.main_window import MainWindow
 
-# Ensure we can find the modules if running from source without install
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from PySide6.QtWidgets import QApplication
+from services.vtk_render_service import VTKRenderService
+from services.file_loader_service import FileLoaderService
+from viewmodels.pipeline_viewmodel import PipelineViewModel
+from viewmodels.vtk_viewmodel import VTKViewModel
+from viewmodels.chat_viewmodel import ChatViewModel
+from views.main_window import MainWindow
+
 
 def main():
     app = QApplication(sys.argv)
     
-    window = MainWindow()
+    render_service = VTKRenderService()
+    file_loader = FileLoaderService()
+    
+    pipeline_vm = PipelineViewModel(render_service, file_loader)
+    vtk_vm = VTKViewModel(render_service)
+    chat_vm = ChatViewModel()
+    
+    window = MainWindow(pipeline_vm, vtk_vm, chat_vm)
     window.show()
     
     sys.exit(app.exec())
+
 
 if __name__ == "__main__":
     main()
