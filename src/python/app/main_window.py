@@ -6,6 +6,23 @@ from PySide6.QtCore import Qt
 from app.vtk_widget import VTKWidget
 import os
 
+class ScientificDoubleSpinBox(QDoubleSpinBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setDecimals(15) # Show many decimals if present
+        self.setRange(-1e30, 1e30) # Very wide range
+        self.setStepType(QDoubleSpinBox.AdaptiveDecimalStepType)
+
+    def textFromValue(self, value):
+        # Use general format 'g' with high precision, then strip trailing zeros
+        # This naturally handles both scientific and standard notation cleanly
+        formatted = format(value, '.10g')
+        return formatted
+
+    def validate(self, text, pos):
+        # Allow 'e' and '-' for scientific notation input
+        return super().validate(text, pos)
+
 try:
     import sa_engine
 except ImportError:
@@ -347,8 +364,7 @@ class MainWindow(QMainWindow):
         style_layout.addRow("Opacity:", opacity_layout)
         
         if style == "Points":
-            size_spin = QDoubleSpinBox()
-            size_spin.setRange(0.1, 50.0)
+            size_spin = ScientificDoubleSpinBox()
             size_spin.setValue(actor.GetProperty().GetPointSize())
             size_spin.valueChanged.connect(lambda v: self.vtk_widget.set_point_size(actor, v))
             
@@ -362,8 +378,7 @@ class MainWindow(QMainWindow):
             style_layout.addRow("Point Size:", row_layout)
             
         elif style in ["Wireframe", "Surface With Edges"]:
-            width_spin = QDoubleSpinBox()
-            width_spin.setRange(0.1, 20.0)
+            width_spin = ScientificDoubleSpinBox()
             width_spin.setValue(actor.GetProperty().GetLineWidth())
             width_spin.valueChanged.connect(lambda v: self.vtk_widget.set_line_width(actor, v))
             
@@ -377,9 +392,8 @@ class MainWindow(QMainWindow):
             style_layout.addRow("Line Width:", row_layout)
             
         elif style == "Point Gaussian":
-            scale_spin = QDoubleSpinBox()
-            scale_spin.setRange(0.001, 5.0)
-            scale_spin.setSingleStep(0.01)
+            scale_spin = ScientificDoubleSpinBox()
+            
             mapper = actor.GetMapper()
             current_scale = mapper.GetScaleFactor() if hasattr(mapper, "GetScaleFactor") else 0.05
             scale_spin.setValue(current_scale)
