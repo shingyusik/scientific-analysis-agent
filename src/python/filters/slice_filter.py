@@ -1,11 +1,38 @@
+from dataclasses import dataclass, field
 from typing import Any, Tuple, Optional, List
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox
 from PySide6.QtCore import Signal, Qt
 from filters.filter_base import FilterBase
 from models.pipeline_item import PipelineItem
-from models.filter_params import SliceParams
 from views.common_widgets import ScientificDoubleSpinBox, OffsetListWidget
 import numpy as np
+
+
+@dataclass
+class SliceParams:
+    """Parameters for slice filter."""
+    
+    origin: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    normal: List[float] = field(default_factory=lambda: [1.0, 0.0, 0.0])
+    offsets: List[float] = field(default_factory=lambda: [0.0])
+    show_preview: bool = True
+    
+    def to_dict(self) -> dict:
+        return {
+            "origin": self.origin.copy(),
+            "normal": self.normal.copy(),
+            "offsets": self.offsets.copy(),
+            "show_preview": self.show_preview,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "SliceParams":
+        return cls(
+            origin=data.get("origin", [0.0, 0.0, 0.0]),
+            normal=data.get("normal", [1.0, 0.0, 0.0]),
+            offsets=data.get("offsets", [0.0]),
+            show_preview=data.get("show_preview", True),
+        )
 
 
 class SliceFilter(FilterBase):

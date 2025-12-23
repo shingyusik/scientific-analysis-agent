@@ -11,7 +11,7 @@ from views.chat_panel import ChatPanel
 from viewmodels.pipeline_viewmodel import PipelineViewModel
 from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
-from models.filter_params import SliceParams
+from filters.slice_filter import SliceParams
 from models.properties_context import PropertiesPanelContext
 import filters
 
