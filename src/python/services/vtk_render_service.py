@@ -21,7 +21,7 @@ class VTKRenderService:
         return self._engine
     
     def create_cone_source(self) -> Tuple[Any, Any]:
-        """Create a cone source with elevation scalars."""
+        """Create a cone source with elevation scalars and vector field."""
         cone = vtk.vtkConeSource()
         cone.SetHeight(3.0)
         cone.SetRadius(1.0)
@@ -35,6 +35,27 @@ class VTKRenderService:
         elev.Update()
         
         output_data = elev.GetOutput()
+        
+        num_points = output_data.GetNumberOfPoints()
+        if num_points > 0:
+            points = output_data.GetPoints()
+            vector_array = vtk.vtkFloatArray()
+            vector_array.SetNumberOfComponents(3)
+            vector_array.SetName("VectorField")
+            
+            for i in range(num_points):
+                point = points.GetPoint(i)
+                x, y, z = point
+                
+                vector_x = x
+                vector_y = y
+                vector_z = z
+                
+                vector_array.InsertNextTuple3(vector_x, vector_y, vector_z)
+            
+            output_data.GetPointData().AddArray(vector_array)
+            output_data.GetPointData().SetActiveVectors("VectorField")
+        
         actor = self.create_actor(output_data)
         actor.GetProperty().SetColor(1.0, 0.6, 0.2)
         
