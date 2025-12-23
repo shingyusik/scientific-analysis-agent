@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
-                               QMenu, QToolButton, QFileDialog, QInputDialog,
+                               QMenu, QToolButton, QFileDialog,
                                QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt

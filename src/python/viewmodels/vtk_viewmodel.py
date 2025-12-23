@@ -108,8 +108,8 @@ class VTKViewModel(QObject):
         """Get actor's current representation style."""
         return self._render_service.get_representation_style(actor)
     
-    def get_data_arrays(self, data: Any) -> List[Tuple[str, str]]:
-        """Get available data arrays."""
+    def get_data_arrays(self, data: Any) -> List[Tuple[str, str, int]]:
+        """Get available data arrays with component count."""
         if data:
             return self._render_service.get_data_arrays(data)
         return []

@@ -170,6 +170,25 @@ class VTKRenderService:
         """Get actor's current representation style."""
         return self._actor_styles.get(id(actor), 'Surface')
     
+    def _get_data_object(self, data: Any, array_type: str):
+        """Get PointData or CellData based on array type."""
+        return data.GetPointData() if array_type == 'POINT' else data.GetCellData()
+    
+    def _get_or_create_derived_array(self, data: Any, arr: Any, derived_name: str, 
+                                      array_type: str, compute_fn) -> Tuple[Any, str]:
+        """Get existing derived array or create new one."""
+        data_obj = self._get_data_object(data, array_type)
+        existing = data_obj.GetArray(derived_name)
+        if existing:
+            return existing, derived_name
+        
+        vtk_array_np = numpy_support.vtk_to_numpy(arr)
+        result_np = compute_fn(vtk_array_np)
+        result_arr = numpy_support.numpy_to_vtk(result_np, deep=True)
+        result_arr.SetName(derived_name)
+        data_obj.AddArray(result_arr)
+        return result_arr, derived_name
+    
     def set_color_by(self, actor: Any, array_name: str, array_type: str = 'POINT', component: str = 'Magnitude') -> None:
         """Set coloring by scalar array. For vector arrays, can use magnitude or components (X, Y, Z)."""
         mapper = actor.GetMapper()
@@ -184,95 +203,25 @@ class VTKRenderService:
         if not data:
             return
         
-        if array_type == 'POINT':
-            arr = data.GetPointData().GetArray(array_name)
-        else:
-            arr = data.GetCellData().GetArray(array_name)
-        
+        arr = self._get_data_object(data, array_type).GetArray(array_name)
         if not arr:
             return
         
-        actual_array_name = array_name
         actual_array = arr
+        actual_array_name = array_name
         
         if arr.GetNumberOfComponents() > 1:
             if component == "Magnitude":
-                magnitude_name = f"{array_name}_Magnitude"
-                
-                if array_type == 'POINT':
-                    existing = data.GetPointData().GetArray(magnitude_name)
-                    if existing:
-                        actual_array = existing
-                        actual_array_name = magnitude_name
-                    else:
-                        vtk_array_np = numpy_support.vtk_to_numpy(arr)
-                        num_tuples, num_components = vtk_array_np.shape
-                        
-                        magnitude_np = np.linalg.norm(vtk_array_np, axis=1)
-                        
-                        magnitude = numpy_support.numpy_to_vtk(magnitude_np, deep=True)
-                        magnitude.SetName(magnitude_name)
-                        
-                        data.GetPointData().AddArray(magnitude)
-                        actual_array = magnitude
-                        actual_array_name = magnitude_name
-                else:
-                    existing = data.GetCellData().GetArray(magnitude_name)
-                    if existing:
-                        actual_array = existing
-                        actual_array_name = magnitude_name
-                    else:
-                        vtk_array_np = numpy_support.vtk_to_numpy(arr)
-                        num_tuples, num_components = vtk_array_np.shape
-                        
-                        magnitude_np = np.linalg.norm(vtk_array_np, axis=1)
-                        
-                        magnitude = numpy_support.numpy_to_vtk(magnitude_np, deep=True)
-                        magnitude.SetName(magnitude_name)
-                        
-                        data.GetCellData().AddArray(magnitude)
-                        actual_array = magnitude
-                        actual_array_name = magnitude_name
+                actual_array, actual_array_name = self._get_or_create_derived_array(
+                    data, arr, f"{array_name}_Magnitude", array_type,
+                    lambda np_arr: np.linalg.norm(np_arr, axis=1)
+                )
             else:
                 component_idx = {"X": 0, "Y": 1, "Z": 2}.get(component, 0)
-                component_name = f"{array_name}_{component}"
-                
-                if array_type == 'POINT':
-                    existing = data.GetPointData().GetArray(component_name)
-                    if existing:
-                        actual_array = existing
-                        actual_array_name = component_name
-                    else:
-                        vtk_array_np = numpy_support.vtk_to_numpy(arr)
-                        num_tuples, num_components = vtk_array_np.shape
-                        
-                        if component_idx < num_components:
-                            component_np = vtk_array_np[:, component_idx]
-                            
-                            component_arr = numpy_support.numpy_to_vtk(component_np, deep=True)
-                            component_arr.SetName(component_name)
-                            
-                            data.GetPointData().AddArray(component_arr)
-                            actual_array = component_arr
-                            actual_array_name = component_name
-                else:
-                    existing = data.GetCellData().GetArray(component_name)
-                    if existing:
-                        actual_array = existing
-                        actual_array_name = component_name
-                    else:
-                        vtk_array_np = numpy_support.vtk_to_numpy(arr)
-                        num_tuples, num_components = vtk_array_np.shape
-                        
-                        if component_idx < num_components:
-                            component_np = vtk_array_np[:, component_idx]
-                            
-                            component_arr = numpy_support.numpy_to_vtk(component_np, deep=True)
-                            component_arr.SetName(component_name)
-                            
-                            data.GetCellData().AddArray(component_arr)
-                            actual_array = component_arr
-                            actual_array_name = component_name
+                actual_array, actual_array_name = self._get_or_create_derived_array(
+                    data, arr, f"{array_name}_{component}", array_type,
+                    lambda np_arr, idx=component_idx: np_arr[:, idx] if idx < np_arr.shape[1] else np_arr[:, 0]
+                )
         
         mapper.ScalarVisibilityOn()
         if array_type == 'POINT':
@@ -325,40 +274,21 @@ class VTKRenderService:
     def get_data_arrays(self, data: Any) -> List[Tuple[str, str, int]]:
         """Get list of available data arrays with component count."""
         arrays = []
-        generated_suffixes = ['_Magnitude', '_X', '_Y', '_Z']
+        generated_suffixes = ('_Magnitude', '_X', '_Y', '_Z')
         
-        pd = data.GetPointData()
-        point_array_names = [pd.GetArrayName(i) for i in range(pd.GetNumberOfArrays()) if pd.GetArrayName(i)]
+        def process_data_object(data_obj, type_name: str):
+            names = [data_obj.GetArrayName(i) for i in range(data_obj.GetNumberOfArrays()) if data_obj.GetArrayName(i)]
+            for name in names:
+                is_generated = any(
+                    name.endswith(suffix) and name[:-len(suffix)] in names
+                    for suffix in generated_suffixes
+                )
+                if not is_generated:
+                    arr = data_obj.GetArray(name)
+                    arrays.append((name, type_name, arr.GetNumberOfComponents() if arr else 1))
         
-        for name in point_array_names:
-            is_generated = False
-            for suffix in generated_suffixes:
-                if name.endswith(suffix):
-                    base_name = name[:-len(suffix)]
-                    if base_name in point_array_names:
-                        is_generated = True
-                        break
-            if not is_generated:
-                arr = pd.GetArray(name)
-                num_components = arr.GetNumberOfComponents() if arr else 1
-                arrays.append((name, 'POINT', num_components))
-        
-        cd = data.GetCellData()
-        cell_array_names = [cd.GetArrayName(i) for i in range(cd.GetNumberOfArrays()) if cd.GetArrayName(i)]
-        
-        for name in cell_array_names:
-            is_generated = False
-            for suffix in generated_suffixes:
-                if name.endswith(suffix):
-                    base_name = name[:-len(suffix)]
-                    if base_name in cell_array_names:
-                        is_generated = True
-                        break
-            if not is_generated:
-                arr = cd.GetArray(name)
-                num_components = arr.GetNumberOfComponents() if arr else 1
-                arrays.append((name, 'CELL', num_components))
-        
+        process_data_object(data.GetPointData(), 'POINT')
+        process_data_object(data.GetCellData(), 'CELL')
         return arrays
     
     def fit_scalar_range(self, actor: Any) -> bool:

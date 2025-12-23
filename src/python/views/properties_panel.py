@@ -108,6 +108,8 @@ class PropertiesPanel(QWidget):
         current_main_idx = 0
         current_component = None
         
+        VALID_COMPONENTS = {"Magnitude", "X", "Y", "Z"}
+        
         if scalar_visible and current_array:
             for idx, (name, type_, num_components) in enumerate(self._data_arrays):
                 if num_components > 1:
@@ -115,18 +117,12 @@ class PropertiesPanel(QWidget):
                         current_main_idx = idx + 1
                         current_component = "Magnitude"
                         break
-                    elif current_array.startswith(f"{name}_"):
-                        suffix = current_array[len(f"{name}_"):]
-                        if suffix in ["Magnitude", "X", "Y", "Z"]:
+                    prefix = f"{name}_"
+                    if current_array.startswith(prefix):
+                        suffix = current_array[len(prefix):]
+                        if suffix in VALID_COMPONENTS:
                             current_main_idx = idx + 1
-                            if suffix == "Magnitude":
-                                current_component = "Magnitude"
-                            elif suffix == "X":
-                                current_component = "X"
-                            elif suffix == "Y":
-                                current_component = "Y"
-                            elif suffix == "Z":
-                                current_component = "Z"
+                            current_component = suffix
                             break
         
         for idx, (name, type_, num_components) in enumerate(self._data_arrays):
