@@ -12,6 +12,7 @@ class VTKRenderService:
     
     def __init__(self):
         self._engine = sa_engine.Engine() if sa_engine else None
+        self._actor_styles: dict[int, str] = {}
     
     @property
     def engine(self):
@@ -119,7 +120,7 @@ class VTKRenderService:
     
     def set_representation(self, actor: Any, style: str) -> None:
         """Set actor representation style."""
-        actor._representation_style = style
+        self._actor_styles[id(actor)] = style
         
         current_mapper = actor.GetMapper()
         data = current_mapper.GetInput()
@@ -165,7 +166,7 @@ class VTKRenderService:
     
     def get_representation_style(self, actor: Any) -> str:
         """Get actor's current representation style."""
-        return getattr(actor, '_representation_style', 'Surface')
+        return self._actor_styles.get(id(actor), 'Surface')
     
     def set_color_by(self, actor: Any, array_name: str, array_type: str = 'POINT') -> None:
         """Set coloring by scalar array."""
