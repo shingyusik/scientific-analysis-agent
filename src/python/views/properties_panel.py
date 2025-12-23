@@ -361,25 +361,49 @@ class PropertiesPanel(QWidget):
         group = QGroupBox("Filter Parameters")
         layout = QFormLayout(group)
         
-        origin_spins = []
-        for i, label in enumerate(["Origin X", "Origin Y", "Origin Z"]):
-            spin = ScientificDoubleSpinBox()
-            spin.setValue(params.origin[i])
-            spin.valueChanged.connect(lambda v, idx=i: self._on_slice_param_changed('origin', idx, v))
-            layout.addRow(label, spin)
-            origin_spins.append(spin)
-        
         show_plane_cb = QCheckBox("Show Plane")
         show_plane_cb.setChecked(params.show_preview)
         show_plane_cb.toggled.connect(lambda v: self._on_slice_preview_toggled(v))
         layout.addRow("", show_plane_cb)
         
-        for i, label in enumerate(["Normal X", "Normal Y", "Normal Z"]):
+        origin_row = QHBoxLayout()
+        origin_row.addWidget(QLabel("Origin:"))
+        origin_spins = []
+        for i, label in enumerate(["X", "Y", "Z"]):
             spin = ScientificDoubleSpinBox()
+            spin.setFixedWidth(100)
+            spin.setValue(params.origin[i])
+            spin.valueChanged.connect(lambda v, idx=i: self._on_slice_param_changed('origin', idx, v))
+            origin_row.addWidget(QLabel(label))
+            origin_row.addWidget(spin)
+            origin_spins.append(spin)
+        
+        origin_reset_btn = QPushButton("Reset")
+        origin_reset_btn.setFixedWidth(50)
+        origin_reset_btn.clicked.connect(lambda: self._reset_origin(origin_spins))
+        origin_row.addWidget(origin_reset_btn)
+        origin_row.addStretch()
+        layout.addRow(origin_row)
+        
+        normal_row = QHBoxLayout()
+        normal_row.addWidget(QLabel("Normal:"))
+        normal_spins = []
+        for i, label in enumerate(["X", "Y", "Z"]):
+            spin = ScientificDoubleSpinBox()
+            spin.setFixedWidth(100)
             spin.setRange(-1, 1)
             spin.setValue(params.normal[i])
             spin.valueChanged.connect(lambda v, idx=i: self._on_slice_param_changed('normal', idx, v))
-            layout.addRow(label, spin)
+            normal_row.addWidget(QLabel(label))
+            normal_row.addWidget(spin)
+            normal_spins.append(spin)
+        
+        normal_reset_btn = QPushButton("Reset")
+        normal_reset_btn.setFixedWidth(50)
+        normal_reset_btn.clicked.connect(lambda: self._reset_normal(normal_spins))
+        normal_row.addWidget(normal_reset_btn)
+        normal_row.addStretch()
+        layout.addRow(normal_row)
         
         self._layout.addWidget(group)
     
@@ -412,4 +436,27 @@ class PropertiesPanel(QWidget):
         self.slice_params_changed.emit(
             self._current_item.id, params.origin, params.normal, params.show_preview
         )
+    
+    def _reset_origin(self, spins: List[ScientificDoubleSpinBox]) -> None:
+        """Reset origin values to [0.0, 0.0, 0.0]."""
+        if not self._current_item:
+            return
+        
+        for i, spin in enumerate(spins):
+            spin.blockSignals(True)
+            spin.setValue(0.0)
+            spin.blockSignals(False)
+            self._on_slice_param_changed('origin', i, 0.0)
+    
+    def _reset_normal(self, spins: List[ScientificDoubleSpinBox]) -> None:
+        """Reset normal values to [1.0, 0.0, 0.0]."""
+        if not self._current_item:
+            return
+        
+        default_values = [1.0, 0.0, 0.0]
+        for i, spin in enumerate(spins):
+            spin.blockSignals(True)
+            spin.setValue(default_values[i])
+            spin.blockSignals(False)
+            self._on_slice_param_changed('normal', i, default_values[i])
 
