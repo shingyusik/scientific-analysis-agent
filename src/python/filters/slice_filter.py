@@ -140,7 +140,8 @@ class SliceFilter(FilterBase):
         params = SliceParams.from_dict(item.filter_params if item else self.create_default_params())
         
         group = QGroupBox("Filter Parameters")
-        form_layout = QFormLayout(group)
+        main_layout = QVBoxLayout(group)
+        form_layout = QFormLayout()
         
         show_plane_cb = QCheckBox("Show Plane")
         show_plane_cb.setChecked(params.show_preview)
@@ -186,10 +187,7 @@ class SliceFilter(FilterBase):
         normal_row.addStretch()
         form_layout.addRow(normal_row)
         
-        layout.addWidget(group)
-        
-        offset_group = QGroupBox("Slice Offsets")
-        offset_layout = QVBoxLayout(offset_group)
+        main_layout.addLayout(form_layout)
         
         self._offset_widget = OffsetListWidget()
         self._offset_widget.set_offsets(params.offsets)
@@ -218,9 +216,9 @@ class SliceFilter(FilterBase):
             self._offset_widget.set_value_range(min_proj, max_proj)
         
         self._offset_widget.offsets_changed.connect(lambda offsets: self._on_offsets_changed(offsets, item))
-        offset_layout.addWidget(self._offset_widget)
+        main_layout.addWidget(self._offset_widget)
         
-        layout.addWidget(offset_group)
+        layout.addWidget(group)
         
         self._params_widget = widget
         return widget
