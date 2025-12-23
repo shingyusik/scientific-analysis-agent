@@ -196,6 +196,12 @@ class VTKRenderService:
             if arr:
                 rng = arr.GetRange()
                 mapper.SetScalarRange(rng)
+                
+                lut = mapper.GetLookupTable()
+                if lut:
+                    lut.SetHueRange(0.6667, 0.0)
+                    lut.SetRange(rng[0], rng[1])
+                    lut.Modified()
     
     def set_opacity(self, actor: Any, value: float) -> None:
         """Set actor opacity (0.0 - 1.0)."""
@@ -277,8 +283,9 @@ class VTKRenderService:
         
         lut = mapper.GetLookupTable()
         if lut:
+            lut.SetHueRange(0.6667, 0.0)
             lut.SetRange(rng[0], rng[1])
-            lut.Build()
+            lut.Modified()
         
         return True
     
@@ -292,8 +299,9 @@ class VTKRenderService:
         
         lut = mapper.GetLookupTable()
         if lut:
+            lut.SetHueRange(0.6667, 0.0)
             lut.SetRange(min_val, max_val)
-            lut.Build()
+            lut.Modified()
         
         return True
 

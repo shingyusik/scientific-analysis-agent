@@ -250,8 +250,9 @@ class VTKWidget(QWidget):
         
         if lut:
             rng = mapper.GetScalarRange()
+            lut.SetHueRange(0.6667, 0.0)
             lut.SetRange(rng[0], rng[1])
-            lut.Build()
+            lut.Modified()
             
             sb_actor = self.scalar_bar_widget.GetScalarBarActor()
             sb_actor.SetLookupTable(lut)
