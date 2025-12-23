@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
-                               QMenu, QToolButton, QFileDialog)
+                               QMenu, QToolButton, QFileDialog, QInputDialog,
+                               QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 
@@ -12,6 +13,41 @@ from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
 from models.filter_params import SliceParams
 from models.properties_context import PropertiesPanelContext
+
+
+class ScalarRangeDialog(QDialog):
+    """Dialog for setting custom scalar range."""
+    
+    def __init__(self, parent=None, current_min: float = 0.0, current_max: float = 1.0):
+        super().__init__(parent)
+        self.setWindowTitle("Custom Scalar Range")
+        self.setModal(True)
+        
+        layout = QFormLayout(self)
+        
+        self.min_spinbox = QDoubleSpinBox()
+        self.min_spinbox.setRange(-1e10, 1e10)
+        self.min_spinbox.setValue(current_min)
+        self.min_spinbox.setDecimals(6)
+        self.min_spinbox.setSingleStep(0.1)
+        
+        self.max_spinbox = QDoubleSpinBox()
+        self.max_spinbox.setRange(-1e10, 1e10)
+        self.max_spinbox.setValue(current_max)
+        self.max_spinbox.setDecimals(6)
+        self.max_spinbox.setSingleStep(0.1)
+        
+        layout.addRow("Minimum value:", self.min_spinbox)
+        layout.addRow("Maximum value:", self.max_spinbox)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+    
+    def get_values(self):
+        """Get the entered min and max values."""
+        return self.min_spinbox.value(), self.max_spinbox.value()
 
 
 class MainWindow(QMainWindow):
@@ -71,6 +107,14 @@ class MainWindow(QMainWindow):
         
         action_xz = toolbar.addAction("XZ Plane")
         action_xz.triggered.connect(lambda: self._vtk_vm.set_view_plane("xz"))
+        
+        toolbar.addSeparator()
+        
+        action_fit_range = toolbar.addAction("Fit Range")
+        action_fit_range.triggered.connect(self._on_fit_range)
+        
+        action_custom_range = toolbar.addAction("Custom Range")
+        action_custom_range.triggered.connect(self._on_custom_range)
         
         toolbar.addSeparator()
         
@@ -357,4 +401,47 @@ class MainWindow(QMainWindow):
                 self._vtk_vm.hide_slice_preview()
         else:
             self._vtk_vm.hide_slice_preview()
+    
+    def _on_fit_range(self) -> None:
+        """Handle fit range button click."""
+        selected = self._pipeline_vm.selected_item
+        if not selected or not selected.actor:
+            self._chat_vm.add_system_message("Please select an item with scalar data.")
+            return
+        
+        if self._vtk_vm.fit_scalar_range(selected.actor):
+            self._vtk_vm.update_scalar_bar(selected.actor)
+            self._vtk_vm.request_render()
+            self._chat_vm.add_system_message("Scalar range fitted to data min/max.")
+        else:
+            self._chat_vm.add_system_message("No scalar data found for selected item.")
+    
+    def _on_custom_range(self) -> None:
+        """Handle custom range button click."""
+        selected = self._pipeline_vm.selected_item
+        if not selected or not selected.actor:
+            self._chat_vm.add_system_message("Please select an item with scalar data.")
+            return
+        
+        mapper = selected.actor.GetMapper()
+        if not mapper or not mapper.GetScalarVisibility():
+            self._chat_vm.add_system_message("Selected item has no scalar data.")
+            return
+        
+        current_range = mapper.GetScalarRange()
+        
+        dialog = ScalarRangeDialog(self, current_range[0], current_range[1])
+        if dialog.exec() == QDialog.Accepted:
+            min_val, max_val = dialog.get_values()
+            
+            if min_val >= max_val:
+                self._chat_vm.add_system_message("Error: Minimum must be less than maximum.")
+                return
+            
+            if self._vtk_vm.set_custom_scalar_range(selected.actor, min_val, max_val):
+                self._vtk_vm.update_scalar_bar(selected.actor)
+                self._vtk_vm.request_render()
+                self._chat_vm.add_system_message(f"Scalar range set to [{min_val:.6g}, {max_val:.6g}].")
+            else:
+                self._chat_vm.add_system_message("Failed to set custom scalar range.")
 

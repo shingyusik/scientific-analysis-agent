@@ -245,4 +245,55 @@ class VTKRenderService:
                 arrays.append((name, 'CELL'))
         
         return arrays
+    
+    def fit_scalar_range(self, actor: Any) -> bool:
+        """Set scalar range to data min/max values."""
+        mapper = actor.GetMapper()
+        if not mapper or not mapper.GetScalarVisibility():
+            return False
+        
+        data = mapper.GetInput()
+        if not data:
+            return False
+        
+        array_name = mapper.GetArrayName()
+        scalars = None
+        
+        if array_name:
+            scalar_mode = mapper.GetScalarMode()
+            if scalar_mode == vtk.VTK_SCALAR_MODE_USE_POINT_FIELD_DATA:
+                scalars = data.GetPointData().GetArray(array_name)
+            elif scalar_mode == vtk.VTK_SCALAR_MODE_USE_CELL_FIELD_DATA:
+                scalars = data.GetCellData().GetArray(array_name)
+        
+        if not scalars:
+            scalars = data.GetPointData().GetScalars() or data.GetCellData().GetScalars()
+        
+        if not scalars:
+            return False
+        
+        rng = scalars.GetRange()
+        mapper.SetScalarRange(rng[0], rng[1])
+        
+        lut = mapper.GetLookupTable()
+        if lut:
+            lut.SetRange(rng[0], rng[1])
+            lut.Build()
+        
+        return True
+    
+    def set_custom_scalar_range(self, actor: Any, min_val: float, max_val: float) -> bool:
+        """Set custom scalar range."""
+        mapper = actor.GetMapper()
+        if not mapper or not mapper.GetScalarVisibility():
+            return False
+        
+        mapper.SetScalarRange(min_val, max_val)
+        
+        lut = mapper.GetLookupTable()
+        if lut:
+            lut.SetRange(min_val, max_val)
+            lut.Build()
+        
+        return True
 

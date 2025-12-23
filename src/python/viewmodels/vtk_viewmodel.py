@@ -113,4 +113,12 @@ class VTKViewModel(QObject):
         if data:
             return self._render_service.get_data_arrays(data)
         return []
+    
+    def fit_scalar_range(self, actor: Any) -> bool:
+        """Fit scalar range to data min/max."""
+        return self._render_service.fit_scalar_range(actor)
+    
+    def set_custom_scalar_range(self, actor: Any, min_val: float, max_val: float) -> bool:
+        """Set custom scalar range."""
+        return self._render_service.set_custom_scalar_range(actor, min_val, max_val)
 

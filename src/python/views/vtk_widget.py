@@ -249,7 +249,7 @@ class VTKWidget(QWidget):
             lut = mapper.GetLookupTable()
         
         if lut:
-            rng = scalars.GetRange()
+            rng = mapper.GetScalarRange()
             lut.SetRange(rng[0], rng[1])
             lut.Build()
             
