@@ -336,9 +336,9 @@ class MainWindow(QMainWindow):
         self._pipeline_vm.set_opacity(item_id, value)
         self._vtk_vm.request_render()
     
-    def _on_color_by_changed(self, item_id: str, array_name: str, array_type: str) -> None:
+    def _on_color_by_changed(self, item_id: str, array_name: str, array_type: str, component: str = '') -> None:
         """Handle color by change."""
-        self._pipeline_vm.set_color_by(item_id, array_name, array_type)
+        self._pipeline_vm.set_color_by(item_id, array_name, array_type, component)
         
         item = self._pipeline_vm.items.get(item_id)
         if item and item.actor and item.visible:

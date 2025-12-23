@@ -28,7 +28,7 @@ class PropertiesPanel(QWidget):
     point_size_changed = Signal(str, float)  # item_id, value
     line_width_changed = Signal(str, float)  # item_id, value
     gaussian_scale_changed = Signal(str, float)  # item_id, value
-    color_by_changed = Signal(str, str, str)  # item_id, array_name, array_type
+    color_by_changed = Signal(str, str, str, str)  # item_id, array_name, array_type, component
     slice_params_changed = Signal(str, list, list, bool)  # item_id, origin, normal, show_preview
     
     def __init__(self, parent=None):
@@ -94,35 +94,112 @@ class PropertiesPanel(QWidget):
         self._layout.addStretch()
     
     def _add_color_by_section(self, current_array: str, scalar_visible: bool) -> None:
-        """Add color by dropdown."""
+        """Add color by dropdown with vector component selection."""
         group = QGroupBox("Color By")
-        layout = QVBoxLayout(group)
+        layout = QHBoxLayout(group)
         
-        combo = QComboBox()
-        combo.addItem("Solid Color", "__SolidColor__")
+        main_combo = QComboBox()
+        main_combo.addItem("Solid Color", ("__SolidColor__", None, None))
         
-        current_idx = 0
-        for idx, (name, type_) in enumerate(self._data_arrays):
-            combo.addItem(f"{name} ({type_})", (name, type_))
-            if scalar_visible and name == current_array:
-                current_idx = idx + 1
+        component_combo = QComboBox()
+        component_combo.addItem("Magnitude", "Magnitude")
+        component_combo.setEnabled(False)
         
-        combo.setCurrentIndex(current_idx)
-        combo.currentIndexChanged.connect(lambda idx: self._on_color_change(combo, idx))
+        current_main_idx = 0
+        current_component = None
         
-        layout.addWidget(combo)
+        if scalar_visible and current_array:
+            for idx, (name, type_, num_components) in enumerate(self._data_arrays):
+                if num_components > 1:
+                    if name == current_array:
+                        current_main_idx = idx + 1
+                        current_component = "Magnitude"
+                        break
+                    elif current_array.startswith(f"{name}_"):
+                        suffix = current_array[len(f"{name}_"):]
+                        if suffix in ["Magnitude", "X", "Y", "Z"]:
+                            current_main_idx = idx + 1
+                            if suffix == "Magnitude":
+                                current_component = "Magnitude"
+                            elif suffix == "X":
+                                current_component = "X"
+                            elif suffix == "Y":
+                                current_component = "Y"
+                            elif suffix == "Z":
+                                current_component = "Z"
+                            break
+        
+        for idx, (name, type_, num_components) in enumerate(self._data_arrays):
+            if num_components > 1:
+                main_combo.addItem(f"{name} ({type_})", (name, type_, num_components))
+            else:
+                main_combo.addItem(f"{name} ({type_})", (name, type_, None))
+                if scalar_visible and name == current_array:
+                    current_main_idx = idx + 1
+        
+        main_combo.setCurrentIndex(current_main_idx)
+        
+        def update_component_combo(idx: int, component_to_select: str = None):
+            component_combo.blockSignals(True)
+            data = main_combo.itemData(idx)
+            if data and data[0] == "__SolidColor__":
+                component_combo.clear()
+                component_combo.addItem("Magnitude", "Magnitude")
+                component_combo.setEnabled(False)
+            elif data and data[2] and data[2] > 1:
+                component_combo.clear()
+                component_combo.addItem("Magnitude", "Magnitude")
+                component_combo.addItem("X", "X")
+                component_combo.addItem("Y", "Y")
+                if data[2] >= 3:
+                    component_combo.addItem("Z", "Z")
+                component_combo.setEnabled(True)
+                
+                component_idx = 0
+                target_component = component_to_select if component_to_select else current_component
+                if target_component:
+                    for i in range(component_combo.count()):
+                        if component_combo.itemData(i) == target_component:
+                            component_idx = i
+                            break
+                component_combo.setCurrentIndex(component_idx)
+            else:
+                component_combo.clear()
+                component_combo.addItem("Magnitude", "Magnitude")
+                component_combo.setEnabled(False)
+            component_combo.blockSignals(False)
+        
+        def on_main_combo_changed():
+            idx = main_combo.currentIndex()
+            data = main_combo.itemData(idx)
+            if data and data[2] and data[2] > 1:
+                update_component_combo(idx, current_component)
+            else:
+                update_component_combo(idx)
+            on_selection_changed()
+        
+        def on_selection_changed():
+            if not self._current_item:
+                return
+            main_data = main_combo.itemData(main_combo.currentIndex())
+            if main_data[0] == "__SolidColor__":
+                self.color_by_changed.emit(self._current_item.id, "__SolidColor__", "POINT", "")
+            else:
+                name, type_, num_components = main_data
+                if num_components and num_components > 1:
+                    component = component_combo.itemData(component_combo.currentIndex())
+                    self.color_by_changed.emit(self._current_item.id, name, type_, component)
+                else:
+                    self.color_by_changed.emit(self._current_item.id, name, type_, "")
+        
+        main_combo.currentIndexChanged.connect(on_main_combo_changed)
+        component_combo.currentIndexChanged.connect(on_selection_changed)
+        
+        update_component_combo(current_main_idx, current_component)
+        
+        layout.addWidget(main_combo)
+        layout.addWidget(component_combo)
         self._layout.addWidget(group)
-    
-    def _on_color_change(self, combo: QComboBox, idx: int) -> None:
-        """Handle color by selection change."""
-        if not self._current_item:
-            return
-        data = combo.itemData(idx)
-        if data == "__SolidColor__":
-            self.color_by_changed.emit(self._current_item.id, "__SolidColor__", "POINT")
-        else:
-            name, type_ = data
-            self.color_by_changed.emit(self._current_item.id, name, type_)
     
     def _add_apply_button(self) -> None:
         """Add apply button for filters."""

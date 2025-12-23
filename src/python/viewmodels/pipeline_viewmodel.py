@@ -185,11 +185,11 @@ class PipelineViewModel(QObject):
             self.item_updated.emit(item)
             self.message.emit(f"Set '{item.name}' representation to {style}.")
     
-    def set_color_by(self, item_id: str, array_name: str, array_type: str = 'POINT') -> None:
+    def set_color_by(self, item_id: str, array_name: str, array_type: str = 'POINT', component: str = 'Magnitude') -> None:
         """Set coloring by scalar array."""
         item = self._items.get(item_id)
         if item and item.actor:
-            self._render_service.set_color_by(item.actor, array_name, array_type)
+            self._render_service.set_color_by(item.actor, array_name, array_type, component)
             self.item_updated.emit(item)
     
     def set_opacity(self, item_id: str, opacity: float) -> None:
