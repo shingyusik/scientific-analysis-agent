@@ -238,8 +238,8 @@ class MainWindow(QMainWindow):
         self._vtk_vm.background_changed.connect(self._vtk_widget.set_background)
         self._vtk_vm.camera_reset_requested.connect(self._vtk_widget.reset_camera)
         self._vtk_vm.view_plane_requested.connect(self._vtk_widget.set_view_plane)
-        self._vtk_vm.slice_preview_requested.connect(self._vtk_widget.update_slice_preview)
-        self._vtk_vm.slice_preview_hide_requested.connect(self._vtk_widget.hide_slice_preview)
+        self._vtk_vm.plane_preview_requested.connect(self._vtk_widget.update_plane_preview)
+        self._vtk_vm.plane_preview_hide_requested.connect(self._vtk_widget.hide_plane_preview)
         self._vtk_vm.scalar_bar_update_requested.connect(self._vtk_widget.update_scalar_bar)
         self._vtk_vm.scalar_bar_hide_requested.connect(self._vtk_widget.hide_scalar_bar)
     
@@ -300,7 +300,7 @@ class MainWindow(QMainWindow):
         if item and item.actor:
             self._vtk_vm.remove_actor(item.actor)
         self._pipeline_browser.remove_item(item_id)
-        self._vtk_vm.hide_slice_preview()
+        self._vtk_vm.hide_plane_preview()
     
     def _on_item_updated(self, item) -> None:
         """Handle item update."""
@@ -317,7 +317,7 @@ class MainWindow(QMainWindow):
         else:
             self._properties_panel.set_item(None)
             self._info_page.setPlainText("")
-            self._vtk_vm.hide_slice_preview()
+            self._vtk_vm.hide_plane_preview()
             self._vtk_vm.hide_scalar_bar()
     
     def _on_browser_selection(self, item_id: str) -> None:
@@ -337,7 +337,7 @@ class MainWindow(QMainWindow):
         if item and item.actor:
             self._vtk_vm.remove_actor(item.actor)
         self._pipeline_vm.delete_item(item_id)
-        self._vtk_vm.hide_slice_preview()
+        self._vtk_vm.hide_plane_preview()
     
     def _on_opacity_changed(self, item_id: str, value: float) -> None:
         """Handle opacity change."""
@@ -363,7 +363,7 @@ class MainWindow(QMainWindow):
         
         item = self._pipeline_vm.items.get(item_id)
         if item and item.item_type == "slice_filter":
-            self._update_slice_preview_visibility(item)
+            self._update_plane_preview_visibility(item)
     
     def _on_message(self, message: str) -> None:
         """Handle status message."""
@@ -374,7 +374,7 @@ class MainWindow(QMainWindow):
         if not item:
             self._properties_panel.set_item(None)
             self._vtk_vm.hide_scalar_bar()
-            self._vtk_vm.hide_slice_preview()
+            self._vtk_vm.hide_plane_preview()
             return
         
         ctx = PropertiesPanelContext.from_item(item, self._vtk_vm)
@@ -391,7 +391,7 @@ class MainWindow(QMainWindow):
         )
         
         self._update_scalar_bar_visibility(item, ctx.scalar_visible)
-        self._update_slice_preview_visibility(item)
+        self._update_plane_preview_visibility(item)
     
     def _update_scalar_bar_visibility(self, item, scalar_visible: bool) -> None:
         """Update scalar bar based on item state."""
@@ -400,18 +400,18 @@ class MainWindow(QMainWindow):
         else:
             self._vtk_vm.hide_scalar_bar()
     
-    def _update_slice_preview_visibility(self, item) -> None:
-        """Update slice preview based on item type."""
+    def _update_plane_preview_visibility(self, item) -> None:
+        """Update plane preview based on item type."""
         if item.item_type == "slice_filter":
             params = SliceParams.from_dict(item.filter_params)
             parent = self._pipeline_vm.get_parent_item(item.id)
             if params.show_preview and parent and parent.vtk_data:
                 bounds = parent.vtk_data.GetBounds()
-                self._vtk_vm.show_slice_preview(params.origin, params.normal, bounds)
+                self._vtk_vm.show_plane_preview(params.origin, params.normal, bounds)
             else:
-                self._vtk_vm.hide_slice_preview()
+                self._vtk_vm.hide_plane_preview()
         else:
-            self._vtk_vm.hide_slice_preview()
+            self._vtk_vm.hide_plane_preview()
     
     def _on_fit_range(self) -> None:
         """Handle fit range button click."""

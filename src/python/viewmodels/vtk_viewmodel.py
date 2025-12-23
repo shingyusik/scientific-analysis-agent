@@ -14,8 +14,8 @@ class VTKViewModel(QObject):
     actor_removed = Signal(object)  # actor
     actor_visibility_changed = Signal(object, bool)  # actor, visible
     clear_scene_requested = Signal()
-    slice_preview_requested = Signal(list, list, tuple)  # origin, normal, bounds
-    slice_preview_hide_requested = Signal()
+    plane_preview_requested = Signal(list, list, tuple)  # origin, normal, bounds
+    plane_preview_hide_requested = Signal()
     scalar_bar_update_requested = Signal(object)  # actor
     scalar_bar_hide_requested = Signal()
     
@@ -87,14 +87,14 @@ class VTKViewModel(QObject):
         """Request a render update."""
         self.render_requested.emit()
     
-    def show_slice_preview(self, origin: List[float], normal: List[float], 
+    def show_plane_preview(self, origin: List[float], normal: List[float], 
                            bounds: Tuple[float, ...]) -> None:
-        """Request slice preview display."""
-        self.slice_preview_requested.emit(origin, normal, bounds)
+        """Request plane preview display."""
+        self.plane_preview_requested.emit(origin, normal, bounds)
     
-    def hide_slice_preview(self) -> None:
-        """Request to hide slice preview."""
-        self.slice_preview_hide_requested.emit()
+    def hide_plane_preview(self) -> None:
+        """Request to hide plane preview."""
+        self.plane_preview_hide_requested.emit()
     
     def update_scalar_bar(self, actor: Any) -> None:
         """Request scalar bar update for actor."""

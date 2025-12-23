@@ -44,7 +44,7 @@ class VTKWidget(QWidget):
         
         self._setup_axes()
         self._setup_scalar_bar()
-        self._setup_slice_preview()
+        self._setup_plane_preview()
         
         self.vtk_widget.Start()
         self.initialized.emit()
@@ -72,8 +72,8 @@ class VTKWidget(QWidget):
         self.scalar_bar_widget.Off()
         self._current_scalar_bar_actor = None
     
-    def _setup_slice_preview(self) -> None:
-        """Setup slice preview plane."""
+    def _setup_plane_preview(self) -> None:
+        """Setup plane preview."""
         self._preview_plane_source = vtk.vtkPlaneSource()
         self._preview_plane_mapper = vtk.vtkPolyDataMapper()
         self._preview_plane_mapper.SetInputConnection(self._preview_plane_source.GetOutputPort())
@@ -176,9 +176,9 @@ class VTKWidget(QWidget):
         elif plane == "xz":
             self.set_view_xz()
     
-    def update_slice_preview(self, origin: List[float], normal: List[float], 
+    def update_plane_preview(self, origin: List[float], normal: List[float], 
                              bounds: Tuple[float, ...]) -> None:
-        """Update slice preview plane."""
+        """Update plane preview."""
         self._preview_plane_source.SetOrigin(-0.5, -0.5, 0)
         self._preview_plane_source.SetPoint1(0.5, -0.5, 0)
         self._preview_plane_source.SetPoint2(-0.5, 0.5, 0)
@@ -198,8 +198,8 @@ class VTKWidget(QWidget):
         self._preview_plane_actor.Modified()
         self.render()
     
-    def hide_slice_preview(self) -> None:
-        """Hide slice preview plane."""
+    def hide_plane_preview(self) -> None:
+        """Hide plane preview."""
         if hasattr(self, '_preview_plane_actor'):
             self._preview_plane_actor.VisibilityOff()
             self.render()
