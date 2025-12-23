@@ -80,11 +80,11 @@ class PropertiesPanel(QWidget):
             self._layout.addWidget(QLabel("No styling properties available for this source."))
             return
         
-        if self._data_arrays:
-            self._add_color_by_section(current_array, scalar_visible)
-        
         if "filter" in item.item_type:
             self._add_apply_button()
+        
+        if self._data_arrays:
+            self._add_color_by_section(current_array, scalar_visible)
         
         self._add_styling_section()
         
