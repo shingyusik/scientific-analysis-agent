@@ -45,7 +45,8 @@ class FilterBase(ABC):
     
     @abstractmethod
     def create_params_widget(self, parent: QWidget, item: Optional[PipelineItem] = None,
-                            parent_bounds: Optional[Tuple[float, ...]] = None) -> Optional[QWidget]:
+                            parent_bounds: Optional[Tuple[float, ...]] = None,
+                            on_params_changed: Optional[callable] = None) -> Optional[QWidget]:
         """
         Create a widget for editing filter parameters.
         
@@ -53,6 +54,7 @@ class FilterBase(ABC):
             parent: Parent widget
             item: Current pipeline item (if editing existing filter)
             parent_bounds: Bounds of parent data (for range calculations)
+            on_params_changed: Callback function(item_id, params_dict) called when params change
             
         Returns:
             QWidget for parameter editing, or None if no parameters needed

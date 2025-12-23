@@ -128,8 +128,11 @@ class SliceFilter(FilterBase):
         return SliceParams().to_dict()
     
     def create_params_widget(self, parent: QWidget, item: Optional[PipelineItem] = None,
-                            parent_bounds: Optional[Tuple[float, ...]] = None) -> Optional[QWidget]:
+                            parent_bounds: Optional[Tuple[float, ...]] = None,
+                            on_params_changed: Optional[callable] = None) -> Optional[QWidget]:
         """Create slice filter parameters widget."""
+        self._on_params_changed_callback = on_params_changed
+        
         widget = QWidget(parent)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -286,10 +289,7 @@ class SliceFilter(FilterBase):
             self._on_normal_changed(i, default_values[i], item)
     
     def _emit_params_changed(self, item: PipelineItem) -> None:
-        """Emit parameters changed signal."""
-        params = SliceParams.from_dict(item.filter_params)
-        if hasattr(self, '_params_changed_signal') and self._params_changed_signal:
-            self._params_changed_signal.emit(
-                item.id, params.origin, params.normal, params.offsets, params.show_preview
-            )
+        """Emit parameters changed via callback."""
+        if hasattr(self, '_on_params_changed_callback') and self._on_params_changed_callback:
+            self._on_params_changed_callback(item.id, item.filter_params)
 

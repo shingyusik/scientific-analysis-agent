@@ -76,8 +76,11 @@ class ClipFilter(FilterBase):
         return ClipParams().to_dict()
     
     def create_params_widget(self, parent: QWidget, item: Optional[PipelineItem] = None,
-                            parent_bounds: Optional[Tuple[float, ...]] = None) -> Optional[QWidget]:
+                            parent_bounds: Optional[Tuple[float, ...]] = None,
+                            on_params_changed: Optional[callable] = None) -> Optional[QWidget]:
         """Create clip filter parameters widget."""
+        self._on_params_changed_callback = on_params_changed
+        
         widget = QWidget(parent)
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -141,6 +144,7 @@ class ClipFilter(FilterBase):
         params = ClipParams.from_dict(item.filter_params)
         params.origin[index] = value
         item.filter_params = params.to_dict()
+        self._emit_params_changed(item)
     
     def _on_normal_changed(self, index: int, value: float, item: Optional[PipelineItem]) -> None:
         """Handle normal parameter change."""
@@ -149,6 +153,7 @@ class ClipFilter(FilterBase):
         params = ClipParams.from_dict(item.filter_params)
         params.normal[index] = value
         item.filter_params = params.to_dict()
+        self._emit_params_changed(item)
     
     def _reset_origin(self, spins: List[ScientificDoubleSpinBox], item: Optional[PipelineItem]) -> None:
         """Reset origin values."""
@@ -178,4 +183,10 @@ class ClipFilter(FilterBase):
         params = ClipParams.from_dict(item.filter_params)
         params.show_preview = value
         item.filter_params = params.to_dict()
+        self._emit_params_changed(item)
+    
+    def _emit_params_changed(self, item: PipelineItem) -> None:
+        """Emit parameters changed via callback."""
+        if hasattr(self, '_on_params_changed_callback') and self._on_params_changed_callback:
+            self._on_params_changed_callback(item.id, item.filter_params)
 

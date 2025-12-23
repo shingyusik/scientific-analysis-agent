@@ -102,8 +102,12 @@ class PropertiesPanel(QWidget):
             return
         
         filter_instance = filter_class(self._render_service)
+        
+        def on_params_changed(item_id: str, params: dict):
+            self.filter_params_changed.emit(item_id, params)
+        
         widget = filter_instance.create_params_widget(
-            self._content, item, self._parent_bounds
+            self._content, item, self._parent_bounds, on_params_changed
         )
         
         if widget:
