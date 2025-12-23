@@ -8,12 +8,14 @@ class SliceParams:
     
     origin: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
     normal: List[float] = field(default_factory=lambda: [1.0, 0.0, 0.0])
+    offsets: List[float] = field(default_factory=lambda: [0.0])
     show_preview: bool = True
     
     def to_dict(self) -> dict:
         return {
             "origin": self.origin.copy(),
             "normal": self.normal.copy(),
+            "offsets": self.offsets.copy(),
             "show_preview": self.show_preview,
         }
     
@@ -22,6 +24,7 @@ class SliceParams:
         return cls(
             origin=data.get("origin", [0.0, 0.0, 0.0]),
             normal=data.get("normal", [1.0, 0.0, 0.0]),
+            offsets=data.get("offsets", [0.0]),
             show_preview=data.get("show_preview", True),
         )
 

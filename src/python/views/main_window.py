@@ -349,9 +349,10 @@ class MainWindow(QMainWindow):
         
         self._vtk_vm.request_render()
     
-    def _on_slice_params_changed(self, item_id: str, origin: list, normal: list, show_preview: bool) -> None:
+    def _on_slice_params_changed(self, item_id: str, origin: list, normal: list, 
+                                  offsets: list, show_preview: bool) -> None:
         """Handle slice parameter change."""
-        self._pipeline_vm.update_slice_params(item_id, origin, normal, show_preview)
+        self._pipeline_vm.update_slice_params(item_id, origin, normal, offsets, show_preview)
         
         item = self._pipeline_vm.items.get(item_id)
         parent = self._pipeline_vm.get_parent_item(item_id)
@@ -375,8 +376,16 @@ class MainWindow(QMainWindow):
             return
         
         ctx = PropertiesPanelContext.from_item(item, self._vtk_vm)
+        
+        parent_bounds = None
+        if item.item_type == "slice_filter":
+            parent = self._pipeline_vm.get_parent_item(item.id)
+            if parent and parent.vtk_data:
+                parent_bounds = parent.vtk_data.GetBounds()
+        
         self._properties_panel.set_item(
-            item, ctx.style, ctx.data_arrays, ctx.current_array, ctx.scalar_visible
+            item, ctx.style, ctx.data_arrays, ctx.current_array, ctx.scalar_visible,
+            parent_bounds
         )
         
         self._update_scalar_bar_visibility(item, ctx.scalar_visible)

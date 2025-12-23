@@ -79,7 +79,7 @@ class PipelineViewModel(QObject):
             return None
     
     def apply_slice(self, parent_id: str, origin: List[float] = None, 
-                    normal: List[float] = None) -> Optional[PipelineItem]:
+                    normal: List[float] = None, offsets: List[float] = None) -> Optional[PipelineItem]:
         """Apply slice filter to a parent item."""
         parent = self._items.get(parent_id)
         if not parent or not parent.vtk_data:
@@ -91,10 +91,14 @@ class PipelineViewModel(QObject):
             origin = list(center)
         if normal is None:
             normal = [1.0, 0.0, 0.0]
+        if offsets is None:
+            offsets = [0.0]
         
-        actor, sliced_data = self._render_service.apply_slice(parent.vtk_data, origin, normal)
+        actor, sliced_data = self._render_service.apply_slice(
+            parent.vtk_data, origin, normal, offsets
+        )
         
-        slice_params = SliceParams(origin=origin, normal=normal)
+        slice_params = SliceParams(origin=origin, normal=normal, offsets=offsets)
         item = PipelineItem(
             name=f"Slice ({parent.name})",
             item_type="slice_filter",
@@ -109,7 +113,8 @@ class PipelineViewModel(QObject):
         return item
     
     def update_slice_params(self, item_id: str, origin: List[float] = None, 
-                            normal: List[float] = None, show_preview: bool = None) -> None:
+                            normal: List[float] = None, offsets: List[float] = None,
+                            show_preview: bool = None) -> None:
         """Update slice filter parameters (preview only, not applied yet)."""
         item = self._items.get(item_id)
         if not item or item.item_type != "slice_filter":
@@ -120,6 +125,8 @@ class PipelineViewModel(QObject):
             params.origin = origin
         if normal is not None:
             params.normal = normal
+        if offsets is not None:
+            params.offsets = offsets
         if show_preview is not None:
             params.show_preview = show_preview
         
@@ -141,7 +148,7 @@ class PipelineViewModel(QObject):
             self.message.emit("[C++ Engine] Recalculating Slice...")
             
             _, sliced_data = self._render_service.apply_slice(
-                parent.vtk_data, params.origin, params.normal
+                parent.vtk_data, params.origin, params.normal, params.offsets
             )
             item.vtk_data = sliced_data
             item.actor.GetMapper().SetInputData(sliced_data)
