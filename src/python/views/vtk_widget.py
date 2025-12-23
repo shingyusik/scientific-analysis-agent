@@ -70,6 +70,7 @@ class VTKWidget(QWidget):
         sb_rep.SetPosition2(0.08, 0.4)
         
         self.scalar_bar_widget.Off()
+        self._current_scalar_bar_actor = None
     
     def _setup_slice_preview(self) -> None:
         """Setup slice preview plane."""
@@ -209,18 +210,32 @@ class VTKWidget(QWidget):
             return
         
         mapper = actor.GetMapper()
-        if not mapper:
+        if not mapper or not mapper.GetScalarVisibility():
+            self.hide_scalar_bar()
             return
         
         data = mapper.GetInput()
         if not data:
             return
         
-        scalars = data.GetPointData().GetScalars() or data.GetCellData().GetScalars()
+        array_name = mapper.GetArrayName()
+        scalars = None
+        
+        if array_name:
+            scalar_mode = mapper.GetScalarMode()
+            if scalar_mode == vtk.VTK_SCALAR_MODE_USE_POINT_FIELD_DATA:
+                scalars = data.GetPointData().GetArray(array_name)
+            elif scalar_mode == vtk.VTK_SCALAR_MODE_USE_CELL_FIELD_DATA:
+                scalars = data.GetCellData().GetArray(array_name)
+        
         if not scalars:
+            scalars = data.GetPointData().GetScalars() or data.GetCellData().GetScalars()
+        
+        if not scalars:
+            self.hide_scalar_bar()
             return
         
-        scalar_name = mapper.GetArrayName()
+        scalar_name = array_name
         if not scalar_name and title:
             scalar_name = title
         if not scalar_name and scalars.GetName():
@@ -254,6 +269,7 @@ class VTKWidget(QWidget):
                 p.ItalicOff()
                 p.SetFontFamilyToArial()
             
+            self._current_scalar_bar_actor = actor
             self.scalar_bar_widget.On()
             self.render()
         else:
@@ -263,11 +279,14 @@ class VTKWidget(QWidget):
         """Hide scalar bar."""
         if self.scalar_bar_widget:
             self.scalar_bar_widget.Off()
+            self._current_scalar_bar_actor = None
             self.render()
     
     def set_actor_visibility(self, actor: Any, visible: bool) -> None:
         """Set actor visibility."""
         if actor:
             actor.SetVisibility(visible)
+            if not visible and hasattr(self, '_current_scalar_bar_actor') and self._current_scalar_bar_actor == actor:
+                self.hide_scalar_bar()
             self.render()
 

@@ -278,9 +278,6 @@ class MainWindow(QMainWindow):
         item = self._pipeline_vm.items.get(item_id)
         if item and item.actor:
             self._vtk_vm.set_actor_visibility(item.actor, visible)
-            
-            if not visible and item == self._pipeline_vm.selected_item:
-                self._vtk_vm.hide_scalar_bar()
     
     def _on_delete_requested(self, item_id: str) -> None:
         """Handle delete request."""
@@ -300,9 +297,8 @@ class MainWindow(QMainWindow):
         self._pipeline_vm.set_color_by(item_id, array_name, array_type)
         
         item = self._pipeline_vm.items.get(item_id)
-        if item and item.actor:
-            mapper = item.actor.GetMapper()
-            if array_name == "__SolidColor__" or not mapper.GetScalarVisibility():
+        if item and item.actor and item.visible:
+            if array_name == "__SolidColor__":
                 self._vtk_vm.hide_scalar_bar()
             else:
                 self._vtk_vm.update_scalar_bar(item.actor)
@@ -344,7 +340,7 @@ class MainWindow(QMainWindow):
     
     def _update_scalar_bar_visibility(self, item, scalar_visible: bool) -> None:
         """Update scalar bar based on item state."""
-        if item.actor and scalar_visible:
+        if item.actor and scalar_visible and item.visible:
             self._vtk_vm.update_scalar_bar(item.actor)
         else:
             self._vtk_vm.hide_scalar_bar()
