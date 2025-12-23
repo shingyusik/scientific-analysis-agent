@@ -11,7 +11,6 @@ from views.chat_panel import ChatPanel
 from viewmodels.pipeline_viewmodel import PipelineViewModel
 from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
-from filters.slice_filter import SliceParams
 from models.properties_context import PropertiesPanelContext
 import filters
 
@@ -362,7 +361,7 @@ class MainWindow(QMainWindow):
         self._pipeline_vm.update_filter_params(item_id, params)
         
         item = self._pipeline_vm.items.get(item_id)
-        if item and item.item_type == "slice_filter":
+        if item and "filter" in item.item_type:
             self._update_plane_preview_visibility(item)
     
     def _on_message(self, message: str) -> None:
@@ -401,15 +400,27 @@ class MainWindow(QMainWindow):
             self._vtk_vm.hide_scalar_bar()
     
     def _update_plane_preview_visibility(self, item) -> None:
-        """Update plane preview based on item type."""
-        if item.item_type == "slice_filter":
-            params = SliceParams.from_dict(item.filter_params)
-            parent = self._pipeline_vm.get_parent_item(item.id)
-            if params.show_preview and parent and parent.vtk_data:
-                bounds = parent.vtk_data.GetBounds()
-                self._vtk_vm.show_plane_preview(params.origin, params.normal, bounds)
-            else:
-                self._vtk_vm.hide_plane_preview()
+        """Update plane preview based on filter's plane preview params."""
+        if "filter" not in item.item_type:
+            self._vtk_vm.hide_plane_preview()
+            return
+        
+        filter_instance = self._pipeline_vm.get_filter(item.item_type)
+        if not filter_instance:
+            self._vtk_vm.hide_plane_preview()
+            return
+        
+        preview_params = filter_instance.get_plane_preview_params(item.filter_params)
+        if not preview_params:
+            self._vtk_vm.hide_plane_preview()
+            return
+        
+        origin, normal, show_preview = preview_params
+        parent = self._pipeline_vm.get_parent_item(item.id)
+        
+        if show_preview and parent and parent.vtk_data:
+            bounds = parent.vtk_data.GetBounds()
+            self._vtk_vm.show_plane_preview(origin, normal, bounds)
         else:
             self._vtk_vm.hide_plane_preview()
     

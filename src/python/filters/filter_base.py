@@ -82,4 +82,16 @@ class FilterBase(ABC):
             Tuple of (is_valid, error_message)
         """
         return True, ""
+    
+    def get_plane_preview_params(self, params: dict) -> Optional[Tuple[List[float], List[float], bool]]:
+        """
+        Get plane preview parameters for visualization.
+        
+        Args:
+            params: Filter parameters dictionary
+            
+        Returns:
+            Tuple of (origin, normal, show_preview) or None if no preview supported
+        """
+        return None
 

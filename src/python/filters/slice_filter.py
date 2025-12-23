@@ -118,6 +118,11 @@ class SliceFilter(FilterBase):
             cutter.Update()
             return cutter.GetOutput()
     
+    def get_plane_preview_params(self, params: dict) -> Optional[Tuple[List[float], List[float], bool]]:
+        """Get plane preview parameters."""
+        slice_params = SliceParams.from_dict(params)
+        return (slice_params.origin, slice_params.normal, slice_params.show_preview)
+    
     def create_default_params(self) -> dict:
         """Create default slice parameters."""
         return SliceParams().to_dict()

@@ -1,5 +1,5 @@
 from typing import Any, Tuple, Optional, List
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout, QLabel, QPushButton
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox
 from PySide6.QtCore import Signal
 from filters.filter_base import FilterBase
 from models.pipeline_item import PipelineItem
@@ -9,14 +9,16 @@ from views.common_widgets import ScientificDoubleSpinBox
 class ClipParams:
     """Parameters for clip filter."""
     
-    def __init__(self, origin=None, normal=None):
+    def __init__(self, origin=None, normal=None, show_preview=True):
         self.origin = origin or [0.0, 0.0, 0.0]
         self.normal = normal or [1.0, 0.0, 0.0]
+        self.show_preview = show_preview
     
     def to_dict(self) -> dict:
         return {
             "origin": self.origin.copy(),
             "normal": self.normal.copy(),
+            "show_preview": self.show_preview,
         }
     
     @classmethod
@@ -24,6 +26,7 @@ class ClipParams:
         return cls(
             origin=data.get("origin", [0.0, 0.0, 0.0]),
             normal=data.get("normal", [1.0, 0.0, 0.0]),
+            show_preview=data.get("show_preview", True),
         )
 
 
@@ -63,6 +66,11 @@ class ClipFilter(FilterBase):
         
         return actor, clipped_data
     
+    def get_plane_preview_params(self, params: dict) -> Optional[Tuple[List[float], List[float], bool]]:
+        """Get plane preview parameters."""
+        clip_params = ClipParams.from_dict(params)
+        return (clip_params.origin, clip_params.normal, clip_params.show_preview)
+    
     def create_default_params(self) -> dict:
         """Create default clip parameters."""
         return ClipParams().to_dict()
@@ -78,6 +86,11 @@ class ClipFilter(FilterBase):
         
         group = QGroupBox("Filter Parameters")
         form_layout = QFormLayout(group)
+        
+        show_plane_cb = QCheckBox("Show Plane")
+        show_plane_cb.setChecked(params.show_preview)
+        show_plane_cb.toggled.connect(lambda v: self._on_show_preview_changed(v, item))
+        form_layout.addRow("", show_plane_cb)
         
         origin_row = QHBoxLayout()
         origin_row.addWidget(QLabel("Origin:"))
@@ -157,4 +170,12 @@ class ClipFilter(FilterBase):
             spin.setValue(default_values[i])
             spin.blockSignals(False)
             self._on_normal_changed(i, default_values[i], item)
+    
+    def _on_show_preview_changed(self, value: bool, item: Optional[PipelineItem]) -> None:
+        """Handle show preview toggle."""
+        if not item:
+            return
+        params = ClipParams.from_dict(item.filter_params)
+        params.show_preview = value
+        item.filter_params = params.to_dict()
 
