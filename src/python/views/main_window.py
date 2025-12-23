@@ -13,6 +13,7 @@ from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
 from models.filter_params import SliceParams
 from models.properties_context import PropertiesPanelContext
+import filters
 
 
 class ScalarRangeDialog(QDialog):
@@ -85,10 +86,16 @@ class MainWindow(QMainWindow):
         file_menu.addAction(exit_action)
         
         filters_menu = menu_bar.addMenu("Filters")
-        
-        slice_action = QAction("Slice", self)
-        slice_action.triggered.connect(self._on_slice)
-        filters_menu.addAction(slice_action)
+        self._populate_filters_menu(filters_menu)
+    
+    def _populate_filters_menu(self, menu: QMenu) -> None:
+        """Populate filters menu from registry."""
+        for filter_type, display_name in self._pipeline_vm.get_available_filters():
+            action = QAction(display_name, self)
+            action.triggered.connect(
+                lambda checked=False, ft=filter_type: self._on_apply_filter(ft)
+            )
+            menu.addAction(action)
     
     def _setup_toolbar(self) -> None:
         """Setup the toolbar."""
@@ -174,6 +181,7 @@ class MainWindow(QMainWindow):
         self._details_tabs = QTabWidget()
         
         self._properties_panel = PropertiesPanel()
+        self._properties_panel.set_render_service(self._pipeline_vm.render_service)
         self._details_tabs.addTab(self._properties_panel, "Properties")
         
         self._info_page = QTextEdit()
@@ -216,6 +224,7 @@ class MainWindow(QMainWindow):
         self._properties_panel.gaussian_scale_changed.connect(self._pipeline_vm.set_gaussian_scale)
         self._properties_panel.color_by_changed.connect(self._on_color_by_changed)
         self._properties_panel.slice_params_changed.connect(self._on_slice_params_changed)
+        self._properties_panel.filter_params_changed.connect(self._on_filter_params_changed)
         
         self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
         self._chat_vm.message_added.connect(
@@ -261,14 +270,14 @@ class MainWindow(QMainWindow):
                 self._vtk_vm.reset_camera()
                 self._pipeline_vm.select_item(item.id)
     
-    def _on_slice(self) -> None:
-        """Handle slice filter action."""
+    def _on_apply_filter(self, filter_type: str) -> None:
+        """Handle filter application from menu."""
         selected = self._pipeline_vm.selected_item
         if not selected:
             self._chat_vm.add_system_message("Please select a source in Pipeline Browser.")
             return
         
-        item = self._pipeline_vm.apply_slice(selected.id)
+        item = self._pipeline_vm.apply_filter(filter_type, selected.id)
         if item:
             self._vtk_vm.add_actor(item.actor)
             self._vtk_vm.request_render()
@@ -352,9 +361,10 @@ class MainWindow(QMainWindow):
     def _on_slice_params_changed(self, item_id: str, origin: list, normal: list, 
                                   offsets: list, show_preview: bool) -> None:
         """Handle slice parameter change."""
-        self._pipeline_vm.update_slice_params(item_id, origin, normal, offsets, show_preview)
+        self._pipeline_vm.update_filter_params(
+            item_id, {"origin": origin, "normal": normal, "offsets": offsets, "show_preview": show_preview}
+        )
         
-        item = self._pipeline_vm.items.get(item_id)
         parent = self._pipeline_vm.get_parent_item(item_id)
         
         if show_preview and parent and parent.vtk_data:
@@ -362,6 +372,10 @@ class MainWindow(QMainWindow):
             self._vtk_vm.show_slice_preview(origin, normal, bounds)
         else:
             self._vtk_vm.hide_slice_preview()
+    
+    def _on_filter_params_changed(self, item_id: str, params: dict) -> None:
+        """Handle general filter parameter change."""
+        self._pipeline_vm.update_filter_params(item_id, params)
     
     def _on_message(self, message: str) -> None:
         """Handle status message."""
@@ -378,7 +392,7 @@ class MainWindow(QMainWindow):
         ctx = PropertiesPanelContext.from_item(item, self._vtk_vm)
         
         parent_bounds = None
-        if item.item_type == "slice_filter":
+        if "filter" in item.item_type:
             parent = self._pipeline_vm.get_parent_item(item.id)
             if parent and parent.vtk_data:
                 parent_bounds = parent.vtk_data.GetBounds()
@@ -453,4 +467,3 @@ class MainWindow(QMainWindow):
                 self._chat_vm.add_system_message(f"Scalar range set to [{min_val:.6g}, {max_val:.6g}].")
             else:
                 self._chat_vm.add_system_message("Failed to set custom scalar range.")
-

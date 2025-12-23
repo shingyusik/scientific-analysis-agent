@@ -1,9 +1,9 @@
 from PySide6.QtCore import QObject, Signal
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from models.pipeline_item import PipelineItem
-from models.filter_params import SliceParams
 from services.vtk_render_service import VTKRenderService
 from services.file_loader_service import FileLoaderService
+import filters
 
 
 class PipelineViewModel(QObject):
@@ -21,6 +21,7 @@ class PipelineViewModel(QObject):
         self._file_loader = file_loader
         self._items: dict[str, PipelineItem] = {}
         self._selected_id: Optional[str] = None
+        self._filter_instances: Dict[str, Any] = {}
     
     @property
     def items(self) -> dict[str, PipelineItem]:
@@ -31,6 +32,27 @@ class PipelineViewModel(QObject):
         if self._selected_id:
             return self._items.get(self._selected_id)
         return None
+    
+    @property
+    def render_service(self) -> VTKRenderService:
+        return self._render_service
+    
+    def get_filter(self, filter_type: str):
+        """Get or create a filter instance."""
+        if filter_type not in self._filter_instances:
+            filter_class = filters.get_filter(filter_type)
+            if filter_class:
+                self._filter_instances[filter_type] = filter_class(self._render_service)
+        return self._filter_instances.get(filter_type)
+    
+    def get_available_filters(self) -> List[tuple]:
+        """Get list of (filter_type, display_name) for all registered filters."""
+        result = []
+        for filter_type in filters.get_all_filter_types():
+            filter_instance = self.get_filter(filter_type)
+            if filter_instance:
+                result.append((filter_type, filter_instance.display_name))
+        return result
     
     def select_item(self, item_id: Optional[str]) -> None:
         """Select a pipeline item."""
@@ -78,82 +100,71 @@ class PipelineViewModel(QObject):
             self.message.emit(f"Error loading file: {e}")
             return None
     
-    def apply_slice(self, parent_id: str, origin: List[float] = None, 
-                    normal: List[float] = None, offsets: List[float] = None) -> Optional[PipelineItem]:
-        """Apply slice filter to a parent item."""
+    def apply_filter(self, filter_type: str, parent_id: str, 
+                     params: dict = None) -> Optional[PipelineItem]:
+        """Apply a filter to a parent item using the filter registry."""
         parent = self._items.get(parent_id)
         if not parent or not parent.vtk_data:
             self.message.emit("Please select a valid source.")
             return None
         
-        if origin is None:
-            center = parent.vtk_data.GetCenter()
-            origin = list(center)
-        if normal is None:
-            normal = [1.0, 0.0, 0.0]
-        if offsets is None:
-            offsets = [0.0]
+        filter_instance = self.get_filter(filter_type)
+        if not filter_instance:
+            self.message.emit(f"Unknown filter type: {filter_type}")
+            return None
         
-        actor, sliced_data = self._render_service.apply_slice(
-            parent.vtk_data, origin, normal, offsets
-        )
+        if params is None:
+            params = filter_instance.create_default_params()
+            if hasattr(parent.vtk_data, 'GetCenter'):
+                center = parent.vtk_data.GetCenter()
+                if 'origin' in params:
+                    params['origin'] = list(center)
         
-        slice_params = SliceParams(origin=origin, normal=normal, offsets=offsets)
+        actor, filtered_data = filter_instance.apply_filter(parent.vtk_data, params)
+        
         item = PipelineItem(
-            name=f"Slice ({parent.name})",
-            item_type="slice_filter",
-            vtk_data=sliced_data,
+            name=f"{filter_instance.display_name} ({parent.name})",
+            item_type=filter_type,
+            vtk_data=filtered_data,
             actor=actor,
             parent_id=parent_id,
-            filter_params=slice_params.to_dict(),
+            filter_params=params,
         )
         self._items[item.id] = item
         self.item_added.emit(item)
-        self.message.emit(f"[C++ Engine] Applied Slice filter to {parent.name}.")
+        self.message.emit(f"Applied {filter_instance.display_name} filter to {parent.name}.")
         return item
     
-    def update_slice_params(self, item_id: str, origin: List[float] = None, 
-                            normal: List[float] = None, offsets: List[float] = None,
-                            show_preview: bool = None) -> None:
-        """Update slice filter parameters (preview only, not applied yet)."""
+    def update_filter_params(self, item_id: str, params: dict) -> None:
+        """Update filter parameters (preview only, not applied yet)."""
         item = self._items.get(item_id)
-        if not item or item.item_type != "slice_filter":
+        if not item or "filter" not in item.item_type:
             return
         
-        params = SliceParams.from_dict(item.filter_params)
-        if origin is not None:
-            params.origin = origin
-        if normal is not None:
-            params.normal = normal
-        if offsets is not None:
-            params.offsets = offsets
-        if show_preview is not None:
-            params.show_preview = show_preview
-        
-        item.filter_params = params.to_dict()
+        item.filter_params.update(params)
         self.item_updated.emit(item)
     
     def commit_filter(self, item_id: str) -> None:
         """Apply filter changes using current parameters."""
         item = self._items.get(item_id)
-        if not item:
+        if not item or "filter" not in item.item_type:
             return
         
         parent = self._items.get(item.parent_id)
         if not parent or not parent.vtk_data:
             return
         
-        if item.item_type == "slice_filter":
-            params = SliceParams.from_dict(item.filter_params)
-            self.message.emit("[C++ Engine] Recalculating Slice...")
-            
-            _, sliced_data = self._render_service.apply_slice(
-                parent.vtk_data, params.origin, params.normal, params.offsets
-            )
-            item.vtk_data = sliced_data
-            item.actor.GetMapper().SetInputData(sliced_data)
-            self.message.emit("Filter applied.")
-            self.item_updated.emit(item)
+        filter_instance = self.get_filter(item.item_type)
+        if not filter_instance:
+            return
+        
+        self.message.emit(f"Recalculating {filter_instance.display_name}...")
+        
+        _, filtered_data = filter_instance.apply_filter(parent.vtk_data, item.filter_params)
+        item.vtk_data = filtered_data
+        item.actor.GetMapper().SetInputData(filtered_data)
+        self.message.emit("Filter applied.")
+        self.item_updated.emit(item)
     
     def delete_item(self, item_id: str) -> None:
         """Delete item and its children from pipeline."""
@@ -236,4 +247,3 @@ class PipelineViewModel(QObject):
             item for item in self._items.values()
             if item.parent_id == item_id
         ]
-
