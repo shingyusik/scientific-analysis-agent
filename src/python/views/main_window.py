@@ -223,7 +223,6 @@ class MainWindow(QMainWindow):
         self._properties_panel.line_width_changed.connect(self._pipeline_vm.set_line_width)
         self._properties_panel.gaussian_scale_changed.connect(self._pipeline_vm.set_gaussian_scale)
         self._properties_panel.color_by_changed.connect(self._on_color_by_changed)
-        self._properties_panel.slice_params_changed.connect(self._on_slice_params_changed)
         self._properties_panel.filter_params_changed.connect(self._on_filter_params_changed)
         
         self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
@@ -358,24 +357,13 @@ class MainWindow(QMainWindow):
         
         self._vtk_vm.request_render()
     
-    def _on_slice_params_changed(self, item_id: str, origin: list, normal: list, 
-                                  offsets: list, show_preview: bool) -> None:
-        """Handle slice parameter change."""
-        self._pipeline_vm.update_filter_params(
-            item_id, {"origin": origin, "normal": normal, "offsets": offsets, "show_preview": show_preview}
-        )
-        
-        parent = self._pipeline_vm.get_parent_item(item_id)
-        
-        if show_preview and parent and parent.vtk_data:
-            bounds = parent.vtk_data.GetBounds()
-            self._vtk_vm.show_slice_preview(origin, normal, bounds)
-        else:
-            self._vtk_vm.hide_slice_preview()
-    
     def _on_filter_params_changed(self, item_id: str, params: dict) -> None:
         """Handle general filter parameter change."""
         self._pipeline_vm.update_filter_params(item_id, params)
+        
+        item = self._pipeline_vm.items.get(item_id)
+        if item and item.item_type == "slice_filter":
+            self._update_slice_preview_visibility(item)
     
     def _on_message(self, message: str) -> None:
         """Handle status message."""

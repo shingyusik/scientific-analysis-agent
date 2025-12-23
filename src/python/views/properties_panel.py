@@ -1,12 +1,10 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QScrollArea, QGroupBox, 
                                QFormLayout, QHBoxLayout, QLabel, QPushButton,
-                               QDoubleSpinBox, QSlider, QSpinBox, QCheckBox, QComboBox)
+                               QSlider, QSpinBox, QComboBox)
 from PySide6.QtCore import Qt, Signal
-from typing import Optional, Any, List, Tuple, TYPE_CHECKING
-import numpy as np
+from typing import Optional, List, Tuple, TYPE_CHECKING
 from models.pipeline_item import PipelineItem
-from models.filter_params import SliceParams
-from views.common_widgets import ScientificDoubleSpinBox, OffsetListWidget
+from views.common_widgets import ScientificDoubleSpinBox
 
 if TYPE_CHECKING:
     from services.vtk_render_service import VTKRenderService
@@ -21,7 +19,6 @@ class PropertiesPanel(QWidget):
     line_width_changed = Signal(str, float)  # item_id, value
     gaussian_scale_changed = Signal(str, float)  # item_id, value
     color_by_changed = Signal(str, str, str, str)  # item_id, array_name, array_type, component
-    slice_params_changed = Signal(str, list, list, list, bool)  # item_id, origin, normal, offsets, show_preview
     filter_params_changed = Signal(str, dict)  # item_id, params (general purpose)
     
     def __init__(self, parent=None):
@@ -30,7 +27,6 @@ class PropertiesPanel(QWidget):
         self._current_style: str = "Surface"
         self._data_arrays: List[Tuple[str, str]] = []
         self._parent_bounds: Optional[Tuple[float, ...]] = None
-        self._offset_list_widget: Optional[OffsetListWidget] = None
         self._render_service: Optional["VTKRenderService"] = None
         self._filter_widget: Optional[QWidget] = None
         
@@ -99,13 +95,6 @@ class PropertiesPanel(QWidget):
     
     def _add_filter_params_section(self, item: PipelineItem) -> None:
         """Add filter parameters section using the filter registry."""
-        if item.item_type == "slice_filter":
-            self._add_slice_params_section()
-        else:
-            self._add_generic_filter_params_section(item)
-    
-    def _add_generic_filter_params_section(self, item: PipelineItem) -> None:
-        """Add filter parameters using the filter registry."""
         import filters
         
         filter_class = filters.get_filter(item.item_type)
@@ -378,158 +367,3 @@ class PropertiesPanel(QWidget):
         row.addWidget(spin)
         row.addWidget(reset_btn)
         layout.addRow("Sphere Radius:", row)
-    
-    def _add_slice_params_section(self) -> None:
-        """Add slice filter parameters section."""
-        if not self._current_item:
-            return
-        
-        params = SliceParams.from_dict(self._current_item.filter_params)
-        
-        group = QGroupBox("Filter Parameters")
-        main_layout = QVBoxLayout(group)
-        form_layout = QFormLayout()
-        
-        show_plane_cb = QCheckBox("Show Plane")
-        show_plane_cb.setChecked(params.show_preview)
-        show_plane_cb.toggled.connect(lambda v: self._on_slice_preview_toggled(v))
-        form_layout.addRow("", show_plane_cb)
-        
-        origin_row = QHBoxLayout()
-        origin_row.addWidget(QLabel("Origin:"))
-        origin_spins = []
-        for i, label in enumerate(["X", "Y", "Z"]):
-            spin = ScientificDoubleSpinBox()
-            spin.setFixedWidth(100)
-            spin.setValue(params.origin[i])
-            spin.valueChanged.connect(lambda v, idx=i: self._on_slice_param_changed('origin', idx, v))
-            origin_row.addWidget(QLabel(label))
-            origin_row.addWidget(spin)
-            origin_spins.append(spin)
-        
-        origin_reset_btn = QPushButton("Reset")
-        origin_reset_btn.setFixedWidth(50)
-        origin_reset_btn.clicked.connect(lambda: self._reset_origin(origin_spins))
-        origin_row.addWidget(origin_reset_btn)
-        origin_row.addStretch()
-        form_layout.addRow(origin_row)
-        
-        normal_row = QHBoxLayout()
-        normal_row.addWidget(QLabel("Normal:"))
-        normal_spins = []
-        for i, label in enumerate(["X", "Y", "Z"]):
-            spin = ScientificDoubleSpinBox()
-            spin.setFixedWidth(100)
-            spin.setRange(-1, 1)
-            spin.setValue(params.normal[i])
-            spin.valueChanged.connect(lambda v, idx=i: self._on_slice_param_changed('normal', idx, v))
-            normal_row.addWidget(QLabel(label))
-            normal_row.addWidget(spin)
-            normal_spins.append(spin)
-        
-        normal_reset_btn = QPushButton("Reset")
-        normal_reset_btn.setFixedWidth(50)
-        normal_reset_btn.clicked.connect(lambda: self._reset_normal(normal_spins))
-        normal_row.addWidget(normal_reset_btn)
-        normal_row.addStretch()
-        form_layout.addRow(normal_row)
-        
-        main_layout.addLayout(form_layout)
-        
-        self._offset_list_widget = OffsetListWidget()
-        self._offset_list_widget.set_offsets(params.offsets)
-        
-        if self._parent_bounds:
-            normal_np = np.array(params.normal)
-            normal_len = np.linalg.norm(normal_np)
-            if normal_len > 0:
-                normal_np = normal_np / normal_len
-            
-            bounds = self._parent_bounds
-            corners = [
-                [bounds[0], bounds[2], bounds[4]],
-                [bounds[1], bounds[2], bounds[4]],
-                [bounds[0], bounds[3], bounds[4]],
-                [bounds[1], bounds[3], bounds[4]],
-                [bounds[0], bounds[2], bounds[5]],
-                [bounds[1], bounds[2], bounds[5]],
-                [bounds[0], bounds[3], bounds[5]],
-                [bounds[1], bounds[3], bounds[5]],
-            ]
-            origin_np = np.array(params.origin)
-            projections = [np.dot(np.array(c) - origin_np, normal_np) for c in corners]
-            min_proj = min(projections)
-            max_proj = max(projections)
-            self._offset_list_widget.set_value_range(min_proj, max_proj)
-        
-        self._offset_list_widget.offsets_changed.connect(self._on_offsets_changed)
-        main_layout.addWidget(self._offset_list_widget)
-        
-        self._layout.addWidget(group)
-    
-    def _on_slice_param_changed(self, param_type: str, index: int, value: float) -> None:
-        """Handle slice parameter change."""
-        if not self._current_item:
-            return
-        
-        params = SliceParams.from_dict(self._current_item.filter_params)
-        
-        if param_type == 'origin':
-            params.origin[index] = value
-        else:
-            params.normal[index] = value
-        
-        self._current_item.filter_params = params.to_dict()
-        self.slice_params_changed.emit(
-            self._current_item.id, params.origin, params.normal, params.offsets, params.show_preview
-        )
-    
-    def _on_slice_preview_toggled(self, visible: bool) -> None:
-        """Handle slice preview toggle."""
-        if not self._current_item:
-            return
-        
-        params = SliceParams.from_dict(self._current_item.filter_params)
-        params.show_preview = visible
-        self._current_item.filter_params = params.to_dict()
-        
-        self.slice_params_changed.emit(
-            self._current_item.id, params.origin, params.normal, params.offsets, params.show_preview
-        )
-    
-    def _on_offsets_changed(self, offsets: List[float]) -> None:
-        """Handle offset list change."""
-        if not self._current_item:
-            return
-        
-        params = SliceParams.from_dict(self._current_item.filter_params)
-        params.offsets = offsets
-        self._current_item.filter_params = params.to_dict()
-        
-        self.slice_params_changed.emit(
-            self._current_item.id, params.origin, params.normal, params.offsets, params.show_preview
-        )
-    
-    def _reset_origin(self, spins: List[ScientificDoubleSpinBox]) -> None:
-        """Reset origin values to [0.0, 0.0, 0.0]."""
-        if not self._current_item:
-            return
-        
-        for i, spin in enumerate(spins):
-            spin.blockSignals(True)
-            spin.setValue(0.0)
-            spin.blockSignals(False)
-            self._on_slice_param_changed('origin', i, 0.0)
-    
-    def _reset_normal(self, spins: List[ScientificDoubleSpinBox]) -> None:
-        """Reset normal values to [1.0, 0.0, 0.0]."""
-        if not self._current_item:
-            return
-        
-        default_values = [1.0, 0.0, 0.0]
-        for i, spin in enumerate(spins):
-            spin.blockSignals(True)
-            spin.setValue(default_values[i])
-            spin.blockSignals(False)
-            self._on_slice_param_changed('normal', i, default_values[i])
-
