@@ -11,6 +11,7 @@ from viewmodels.pipeline_viewmodel import PipelineViewModel
 from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
 from models.filter_params import SliceParams
+from models.properties_context import PropertiesPanelContext
 
 
 class MainWindow(QMainWindow):
@@ -58,18 +59,18 @@ class MainWindow(QMainWindow):
         toolbar = self.addToolBar("View Controls")
         
         action_reset = toolbar.addAction("Home (Reset)")
-        action_reset.triggered.connect(lambda: self._vtk_widget.reset_camera())
+        action_reset.triggered.connect(self._vtk_vm.reset_camera)
         
         toolbar.addSeparator()
         
         action_xy = toolbar.addAction("XY Plane")
-        action_xy.triggered.connect(lambda: self._vtk_widget.set_view_xy())
+        action_xy.triggered.connect(lambda: self._vtk_vm.set_view_plane("xy"))
         
         action_yz = toolbar.addAction("YZ Plane")
-        action_yz.triggered.connect(lambda: self._vtk_widget.set_view_yz())
+        action_yz.triggered.connect(lambda: self._vtk_vm.set_view_plane("yz"))
         
         action_xz = toolbar.addAction("XZ Plane")
-        action_xz.triggered.connect(lambda: self._vtk_widget.set_view_xz())
+        action_xz.triggered.connect(lambda: self._vtk_vm.set_view_plane("xz"))
         
         toolbar.addSeparator()
         
@@ -90,7 +91,7 @@ class MainWindow(QMainWindow):
         for name, c1, c2 in self._vtk_vm.BACKGROUND_PRESETS:
             action = bg_menu.addAction(name)
             action.triggered.connect(
-                lambda checked=False, col1=c1, col2=c2: self._vtk_widget.set_background(col1, col2)
+                lambda checked=False, col1=c1, col2=c2: self._vtk_vm.set_background(col1, col2)
             )
         
         bg_btn.setMenu(bg_menu)
@@ -176,6 +177,19 @@ class MainWindow(QMainWindow):
         self._chat_vm.message_added.connect(
             lambda msg: self._chat_panel.append_message(msg.sender, msg.content)
         )
+        
+        self._vtk_vm.render_requested.connect(self._vtk_widget.render)
+        self._vtk_vm.actor_added.connect(self._vtk_widget.add_actor)
+        self._vtk_vm.actor_removed.connect(self._vtk_widget.remove_actor)
+        self._vtk_vm.actor_visibility_changed.connect(self._vtk_widget.set_actor_visibility)
+        self._vtk_vm.clear_scene_requested.connect(self._vtk_widget.clear_scene)
+        self._vtk_vm.background_changed.connect(self._vtk_widget.set_background)
+        self._vtk_vm.camera_reset_requested.connect(self._vtk_widget.reset_camera)
+        self._vtk_vm.view_plane_requested.connect(self._vtk_widget.set_view_plane)
+        self._vtk_vm.slice_preview_requested.connect(self._vtk_widget.update_slice_preview)
+        self._vtk_vm.slice_preview_hide_requested.connect(self._vtk_widget.hide_slice_preview)
+        self._vtk_vm.scalar_bar_update_requested.connect(self._vtk_widget.update_scalar_bar)
+        self._vtk_vm.scalar_bar_hide_requested.connect(self._vtk_widget.hide_scalar_bar)
     
     def _initialize(self) -> None:
         """Initialize the application state."""
@@ -186,10 +200,10 @@ class MainWindow(QMainWindow):
         else:
             self._chat_vm.add_system_message("Warning - sa_engine not available.")
         
-        self._vtk_widget.clear_scene()
+        self._vtk_vm.clear_scene()
         item = self._pipeline_vm.create_cone_source()
-        self._vtk_widget.add_actor(item.actor)
-        self._vtk_widget.reset_camera()
+        self._vtk_vm.add_actor(item.actor)
+        self._vtk_vm.reset_camera()
     
     def _on_load_file(self) -> None:
         """Handle file load action."""
@@ -199,8 +213,8 @@ class MainWindow(QMainWindow):
         if file_name:
             item = self._pipeline_vm.load_file(file_name)
             if item:
-                self._vtk_widget.add_actor(item.actor)
-                self._vtk_widget.reset_camera()
+                self._vtk_vm.add_actor(item.actor)
+                self._vtk_vm.reset_camera()
                 self._pipeline_vm.select_item(item.id)
     
     def _on_slice(self) -> None:
@@ -212,8 +226,8 @@ class MainWindow(QMainWindow):
         
         item = self._pipeline_vm.apply_slice(selected.id)
         if item:
-            self._vtk_widget.add_actor(item.actor)
-            self._vtk_widget.render()
+            self._vtk_vm.add_actor(item.actor)
+            self._vtk_vm.request_render()
             self._pipeline_vm.select_item(item.id)
     
     def _on_representation_changed(self, style: str) -> None:
@@ -222,7 +236,7 @@ class MainWindow(QMainWindow):
         if selected:
             self._pipeline_vm.set_representation(selected.id, style)
             self._update_properties_panel(selected)
-            self._vtk_widget.render()
+            self._vtk_vm.request_render()
     
     def _on_item_added(self, item) -> None:
         """Handle item added to pipeline."""
@@ -232,16 +246,16 @@ class MainWindow(QMainWindow):
         """Handle item removed from pipeline."""
         item = self._pipeline_vm.items.get(item_id)
         if item and item.actor:
-            self._vtk_widget.remove_actor(item.actor)
+            self._vtk_vm.remove_actor(item.actor)
         self._pipeline_browser.remove_item(item_id)
-        self._vtk_widget.hide_slice_preview()
+        self._vtk_vm.hide_slice_preview()
     
     def _on_item_updated(self, item) -> None:
         """Handle item update."""
         self._pipeline_browser.update_item(item)
         if item == self._pipeline_vm.selected_item:
             self._update_properties_panel(item)
-        self._vtk_widget.render()
+        self._vtk_vm.request_render()
     
     def _on_selection_changed(self, item) -> None:
         """Handle selection change."""
@@ -251,8 +265,8 @@ class MainWindow(QMainWindow):
         else:
             self._properties_panel.set_item(None)
             self._info_page.setPlainText("")
-            self._vtk_widget.hide_slice_preview()
-            self._vtk_widget.hide_scalar_bar()
+            self._vtk_vm.hide_slice_preview()
+            self._vtk_vm.hide_scalar_bar()
     
     def _on_browser_selection(self, item_id: str) -> None:
         """Handle browser selection."""
@@ -263,23 +277,23 @@ class MainWindow(QMainWindow):
         self._pipeline_vm.set_visibility(item_id, visible)
         item = self._pipeline_vm.items.get(item_id)
         if item and item.actor:
-            self._vtk_widget.set_actor_visibility(item.actor, visible)
+            self._vtk_vm.set_actor_visibility(item.actor, visible)
             
             if not visible and item == self._pipeline_vm.selected_item:
-                self._vtk_widget.hide_scalar_bar()
+                self._vtk_vm.hide_scalar_bar()
     
     def _on_delete_requested(self, item_id: str) -> None:
         """Handle delete request."""
         item = self._pipeline_vm.items.get(item_id)
         if item and item.actor:
-            self._vtk_widget.remove_actor(item.actor)
+            self._vtk_vm.remove_actor(item.actor)
         self._pipeline_vm.delete_item(item_id)
-        self._vtk_widget.hide_slice_preview()
+        self._vtk_vm.hide_slice_preview()
     
     def _on_opacity_changed(self, item_id: str, value: float) -> None:
         """Handle opacity change."""
         self._pipeline_vm.set_opacity(item_id, value)
-        self._vtk_widget.render()
+        self._vtk_vm.request_render()
     
     def _on_color_by_changed(self, item_id: str, array_name: str, array_type: str) -> None:
         """Handle color by change."""
@@ -289,11 +303,11 @@ class MainWindow(QMainWindow):
         if item and item.actor:
             mapper = item.actor.GetMapper()
             if array_name == "__SolidColor__" or not mapper.GetScalarVisibility():
-                self._vtk_widget.hide_scalar_bar()
+                self._vtk_vm.hide_scalar_bar()
             else:
-                self._vtk_widget.update_scalar_bar(item.actor)
+                self._vtk_vm.update_scalar_bar(item.actor)
         
-        self._vtk_widget.render()
+        self._vtk_vm.request_render()
     
     def _on_slice_params_changed(self, item_id: str, origin: list, normal: list, show_preview: bool) -> None:
         """Handle slice parameter change."""
@@ -304,9 +318,9 @@ class MainWindow(QMainWindow):
         
         if show_preview and parent and parent.vtk_data:
             bounds = parent.vtk_data.GetBounds()
-            self._vtk_widget.update_slice_preview(origin, normal, bounds)
+            self._vtk_vm.show_slice_preview(origin, normal, bounds)
         else:
-            self._vtk_widget.hide_slice_preview()
+            self._vtk_vm.hide_slice_preview()
     
     def _on_message(self, message: str) -> None:
         """Handle status message."""
@@ -316,41 +330,35 @@ class MainWindow(QMainWindow):
         """Update properties panel for item."""
         if not item:
             self._properties_panel.set_item(None)
-            self._vtk_widget.hide_scalar_bar()
-            self._vtk_widget.hide_slice_preview()
+            self._vtk_vm.hide_scalar_bar()
+            self._vtk_vm.hide_slice_preview()
             return
         
-        style = "Surface"
-        data_arrays = []
-        current_array = None
-        scalar_visible = False
+        ctx = PropertiesPanelContext.from_item(item, self._vtk_vm)
+        self._properties_panel.set_item(
+            item, ctx.style, ctx.data_arrays, ctx.current_array, ctx.scalar_visible
+        )
         
-        if item.actor:
-            style = self._vtk_vm.get_representation_style(item.actor)
-            
-            if item.vtk_data:
-                data_arrays = self._vtk_vm.get_data_arrays(item.vtk_data)
-            
-            mapper = item.actor.GetMapper()
-            if mapper:
-                current_array = mapper.GetArrayName()
-                scalar_visible = mapper.GetScalarVisibility()
-        
-        self._properties_panel.set_item(item, style, data_arrays, current_array, scalar_visible)
-        
+        self._update_scalar_bar_visibility(item, ctx.scalar_visible)
+        self._update_slice_preview_visibility(item)
+    
+    def _update_scalar_bar_visibility(self, item, scalar_visible: bool) -> None:
+        """Update scalar bar based on item state."""
         if item.actor and scalar_visible:
-            self._vtk_widget.update_scalar_bar(item.actor)
+            self._vtk_vm.update_scalar_bar(item.actor)
         else:
-            self._vtk_widget.hide_scalar_bar()
-        
+            self._vtk_vm.hide_scalar_bar()
+    
+    def _update_slice_preview_visibility(self, item) -> None:
+        """Update slice preview based on item type."""
         if item.item_type == "slice_filter":
             params = SliceParams.from_dict(item.filter_params)
             parent = self._pipeline_vm.get_parent_item(item.id)
             if params.show_preview and parent and parent.vtk_data:
                 bounds = parent.vtk_data.GetBounds()
-                self._vtk_widget.update_slice_preview(params.origin, params.normal, bounds)
+                self._vtk_vm.show_slice_preview(params.origin, params.normal, bounds)
             else:
-                self._vtk_widget.hide_slice_preview()
+                self._vtk_vm.hide_slice_preview()
         else:
-            self._vtk_widget.hide_slice_preview()
+            self._vtk_vm.hide_slice_preview()
 

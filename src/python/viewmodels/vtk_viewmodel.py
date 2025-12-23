@@ -12,6 +12,8 @@ class VTKViewModel(QObject):
     view_plane_requested = Signal(str)  # "xy", "yz", "xz"
     actor_added = Signal(object)  # actor
     actor_removed = Signal(object)  # actor
+    actor_visibility_changed = Signal(object, bool)  # actor, visible
+    clear_scene_requested = Signal()
     slice_preview_requested = Signal(list, list, tuple)  # origin, normal, bounds
     slice_preview_hide_requested = Signal()
     scalar_bar_update_requested = Signal(object)  # actor
@@ -71,6 +73,15 @@ class VTKViewModel(QObject):
         """Request actor to be removed from renderer."""
         self.actor_removed.emit(actor)
         self.render_requested.emit()
+    
+    def set_actor_visibility(self, actor: Any, visible: bool) -> None:
+        """Request actor visibility change."""
+        self.actor_visibility_changed.emit(actor, visible)
+        self.render_requested.emit()
+    
+    def clear_scene(self) -> None:
+        """Request to clear all actors from scene."""
+        self.clear_scene_requested.emit()
     
     def request_render(self) -> None:
         """Request a render update."""

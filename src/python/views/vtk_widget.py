@@ -166,6 +166,15 @@ class VTKWidget(QWidget):
         self.renderer.ResetCamera()
         self.render()
     
+    def set_view_plane(self, plane: str) -> None:
+        """Set view to specified plane."""
+        if plane == "xy":
+            self.set_view_xy()
+        elif plane == "yz":
+            self.set_view_yz()
+        elif plane == "xz":
+            self.set_view_xz()
+    
     def update_slice_preview(self, origin: List[float], normal: List[float], 
                              bounds: Tuple[float, ...]) -> None:
         """Update slice preview plane."""
