@@ -86,65 +86,6 @@ class VTKRenderService:
         
         return actor
     
-    def apply_slice(self, data: Any, origin: List[float], normal: List[float], 
-                    offsets: List[float] = None) -> Tuple[Any, Any]:
-        """Apply slice filter with multiple offsets using C++ engine."""
-        if offsets is None:
-            offsets = [0.0]
-        
-        normal_np = np.array(normal, dtype=np.float64)
-        normal_len = np.linalg.norm(normal_np)
-        if normal_len > 0:
-            normal_np = normal_np / normal_len
-        
-        if len(offsets) == 1:
-            offset_origin = [
-                origin[0] + offsets[0] * normal_np[0],
-                origin[1] + offsets[0] * normal_np[1],
-                origin[2] + offsets[0] * normal_np[2]
-            ]
-            sliced_data = self._apply_single_slice(data, offset_origin, normal)
-        else:
-            append_filter = vtk.vtkAppendPolyData()
-            for offset in offsets:
-                offset_origin = [
-                    origin[0] + offset * normal_np[0],
-                    origin[1] + offset * normal_np[1],
-                    origin[2] + offset * normal_np[2]
-                ]
-                single_slice = self._apply_single_slice(data, offset_origin, normal)
-                if single_slice.GetNumberOfPoints() > 0:
-                    append_filter.AddInputData(single_slice)
-            append_filter.Update()
-            sliced_data = append_filter.GetOutput()
-        
-        mapper = vtk.vtkPolyDataMapper()
-        mapper.SetInputData(sliced_data)
-        
-        actor = vtk.vtkActor()
-        actor.SetMapper(mapper)
-        actor.GetProperty().SetColor(1, 1, 1)
-        
-        return actor, sliced_data
-    
-    def _apply_single_slice(self, data: Any, origin: List[float], normal: List[float]) -> Any:
-        """Apply a single slice cut."""
-        if self._engine:
-            return self._engine.apply_slice(
-                data, origin[0], origin[1], origin[2],
-                normal[0], normal[1], normal[2]
-            )
-        else:
-            plane = vtk.vtkPlane()
-            plane.SetOrigin(origin)
-            plane.SetNormal(normal)
-            
-            cutter = vtk.vtkCutter()
-            cutter.SetInputData(data)
-            cutter.SetCutFunction(plane)
-            cutter.Update()
-            return cutter.GetOutput()
-    
     def apply_contour(self, data: Any, value: float, array_name: str = None) -> Tuple[Any, Any]:
         """Apply contour filter."""
         contour = vtk.vtkContourFilter()

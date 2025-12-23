@@ -6,6 +6,12 @@ from filters.filter_base import FilterBase
 from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox, OffsetListWidget
 import numpy as np
+import vtk
+
+try:
+    import sa_engine
+except ImportError:
+    sa_engine = None
 
 
 @dataclass
@@ -52,14 +58,65 @@ class SliceFilter(FilterBase):
         return "Slice"
     
     def apply_filter(self, data: Any, params: dict) -> Tuple[Any, Any]:
-        """Apply slice filter."""
+        """Apply slice filter with multiple offsets."""
         slice_params = SliceParams.from_dict(params)
-        return self._render_service.apply_slice(
-            data,
-            slice_params.origin,
-            slice_params.normal,
-            slice_params.offsets
-        )
+        origin = slice_params.origin
+        normal = slice_params.normal
+        offsets = slice_params.offsets
+        
+        normal_np = np.array(normal, dtype=np.float64)
+        normal_len = np.linalg.norm(normal_np)
+        if normal_len > 0:
+            normal_np = normal_np / normal_len
+        
+        if len(offsets) == 1:
+            offset_origin = [
+                origin[0] + offsets[0] * normal_np[0],
+                origin[1] + offsets[0] * normal_np[1],
+                origin[2] + offsets[0] * normal_np[2]
+            ]
+            sliced_data = self._apply_single_slice(data, offset_origin, normal)
+        else:
+            append_filter = vtk.vtkAppendPolyData()
+            for offset in offsets:
+                offset_origin = [
+                    origin[0] + offset * normal_np[0],
+                    origin[1] + offset * normal_np[1],
+                    origin[2] + offset * normal_np[2]
+                ]
+                single_slice = self._apply_single_slice(data, offset_origin, normal)
+                if single_slice.GetNumberOfPoints() > 0:
+                    append_filter.AddInputData(single_slice)
+            append_filter.Update()
+            sliced_data = append_filter.GetOutput()
+        
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(sliced_data)
+        
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetColor(1, 1, 1)
+        
+        return actor, sliced_data
+    
+    def _apply_single_slice(self, data: Any, origin: List[float], normal: List[float]) -> Any:
+        """Apply a single slice cut using C++ engine if available."""
+        engine = sa_engine.Engine() if sa_engine else None
+        if engine:
+            return engine.apply_slice(
+                data, origin[0], origin[1], origin[2],
+                normal[0], normal[1], normal[2]
+            )
+        else:
+            plane = vtk.vtkPlane()
+            plane.SetOrigin(origin)
+            plane.SetNormal(normal)
+            
+            cutter = vtk.vtkCutter()
+            cutter.SetInputData(data)
+            cutter.SetCutFunction(plane)
+            cutter.Update()
+            return cutter.GetOutput()
     
     def create_default_params(self) -> dict:
         """Create default slice parameters."""
