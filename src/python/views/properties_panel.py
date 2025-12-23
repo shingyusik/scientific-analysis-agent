@@ -608,12 +608,13 @@ class PropertiesPanel(QWidget):
         params = SliceParams.from_dict(self._current_item.filter_params)
         
         group = QGroupBox("Filter Parameters")
-        layout = QFormLayout(group)
+        main_layout = QVBoxLayout(group)
+        form_layout = QFormLayout()
         
         show_plane_cb = QCheckBox("Show Plane")
         show_plane_cb.setChecked(params.show_preview)
         show_plane_cb.toggled.connect(lambda v: self._on_slice_preview_toggled(v))
-        layout.addRow("", show_plane_cb)
+        form_layout.addRow("", show_plane_cb)
         
         origin_row = QHBoxLayout()
         origin_row.addWidget(QLabel("Origin:"))
@@ -632,7 +633,7 @@ class PropertiesPanel(QWidget):
         origin_reset_btn.clicked.connect(lambda: self._reset_origin(origin_spins))
         origin_row.addWidget(origin_reset_btn)
         origin_row.addStretch()
-        layout.addRow(origin_row)
+        form_layout.addRow(origin_row)
         
         normal_row = QHBoxLayout()
         normal_row.addWidget(QLabel("Normal:"))
@@ -652,12 +653,9 @@ class PropertiesPanel(QWidget):
         normal_reset_btn.clicked.connect(lambda: self._reset_normal(normal_spins))
         normal_row.addWidget(normal_reset_btn)
         normal_row.addStretch()
-        layout.addRow(normal_row)
+        form_layout.addRow(normal_row)
         
-        self._layout.addWidget(group)
-        
-        offset_group = QGroupBox("Slice Offsets")
-        offset_layout = QVBoxLayout(offset_group)
+        main_layout.addLayout(form_layout)
         
         self._offset_list_widget = OffsetListWidget()
         self._offset_list_widget.set_offsets(params.offsets)
@@ -686,9 +684,9 @@ class PropertiesPanel(QWidget):
             self._offset_list_widget.set_value_range(min_proj, max_proj)
         
         self._offset_list_widget.offsets_changed.connect(self._on_offsets_changed)
-        offset_layout.addWidget(self._offset_list_widget)
+        main_layout.addWidget(self._offset_list_widget)
         
-        self._layout.addWidget(offset_group)
+        self._layout.addWidget(group)
     
     def _on_slice_param_changed(self, param_type: str, index: int, value: float) -> None:
         """Handle slice parameter change."""
