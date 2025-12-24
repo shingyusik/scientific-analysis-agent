@@ -8,9 +8,11 @@ from views.vtk_widget import VTKWidget
 from views.pipeline_browser import PipelineBrowserWidget
 from views.properties_panel import PropertiesPanel
 from views.chat_panel import ChatPanel
+from views.time_animation_widget import TimeAnimationWidget
 from viewmodels.pipeline_viewmodel import PipelineViewModel
 from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
+from viewmodels.time_series_manager import TimeSeriesManager
 from models.properties_context import PropertiesPanelContext
 import filters
 
@@ -58,6 +60,7 @@ class MainWindow(QMainWindow):
         self._pipeline_vm = pipeline_vm
         self._vtk_vm = vtk_vm
         self._chat_vm = chat_vm
+        self._time_manager = TimeSeriesManager(self)
         
         self.setWindowTitle("Scientific Analysis Agent")
         self.resize(1400, 900)
@@ -126,6 +129,8 @@ class MainWindow(QMainWindow):
         
         self._setup_background_menu(toolbar)
         self._setup_representation_menu(toolbar)
+        
+        self._setup_time_animation_toolbar()
     
     def _setup_background_menu(self, toolbar) -> None:
         """Setup background color dropdown."""
@@ -166,6 +171,13 @@ class MainWindow(QMainWindow):
         
         rep_btn.setMenu(rep_menu)
         toolbar.addWidget(rep_btn)
+    
+    def _setup_time_animation_toolbar(self) -> None:
+        """Setup time animation toolbar."""
+        time_toolbar = self.addToolBar("Time Animation")
+        
+        self._time_animation_widget = TimeAnimationWidget(self._time_manager)
+        time_toolbar.addWidget(self._time_animation_widget)
     
     def _setup_main_layout(self) -> None:
         """Setup the main layout with splitters."""
@@ -211,6 +223,7 @@ class MainWindow(QMainWindow):
         self._pipeline_vm.item_updated.connect(self._on_item_updated)
         self._pipeline_vm.selection_changed.connect(self._on_selection_changed)
         self._pipeline_vm.message.connect(self._on_message)
+        self._pipeline_vm.time_series_loaded.connect(self._on_time_series_loaded)
         
         self._pipeline_browser.item_selected.connect(self._on_browser_selection)
         self._pipeline_browser.item_visibility_changed.connect(self._on_visibility_changed)
@@ -241,6 +254,8 @@ class MainWindow(QMainWindow):
         self._vtk_vm.plane_preview_hide_requested.connect(self._vtk_widget.hide_plane_preview)
         self._vtk_vm.scalar_bar_update_requested.connect(self._vtk_widget.update_scalar_bar)
         self._vtk_vm.scalar_bar_hide_requested.connect(self._vtk_widget.hide_scalar_bar)
+        
+        self._time_manager.time_changed.connect(self._on_time_step_changed)
     
     def _initialize(self) -> None:
         """Initialize the application state."""
@@ -258,15 +273,22 @@ class MainWindow(QMainWindow):
     
     def _on_load_file(self) -> None:
         """Handle file load action."""
-        file_name, _ = QFileDialog.getOpenFileName(
+        file_names, _ = QFileDialog.getOpenFileNames(
             self, "Load Data", "", "VTK Files (*.vtu *.vti *.vtk)"
         )
-        if file_name:
-            item = self._pipeline_vm.load_file(file_name)
-            if item:
-                self._vtk_vm.add_actor(item.actor)
-                self._vtk_vm.reset_camera()
-                self._pipeline_vm.select_item(item.id)
+        if not file_names:
+            return
+        
+        if len(file_names) > 1:
+            file_names.sort()
+            item = self._pipeline_vm.load_time_series(file_names)
+        else:
+            item = self._pipeline_vm.load_file(file_names[0])
+        
+        if item:
+            self._vtk_vm.add_actor(item.actor)
+            self._vtk_vm.reset_camera()
+            self._pipeline_vm.select_item(item.id)
     
     def _on_apply_filter(self, filter_type: str) -> None:
         """Handle filter application from menu."""
@@ -313,11 +335,14 @@ class MainWindow(QMainWindow):
         if item:
             self._update_properties_panel(item)
             self._info_page.setPlainText(item.get_info_string())
+            self._update_time_animation_widget(item)
         else:
             self._properties_panel.set_item(None)
             self._info_page.setPlainText("")
             self._vtk_vm.hide_plane_preview()
             self._vtk_vm.hide_scalar_bar()
+            self._time_manager.set_item(None)
+            self._time_animation_widget.reset()
     
     def _on_browser_selection(self, item_id: str) -> None:
         """Handle browser selection."""
@@ -466,3 +491,34 @@ class MainWindow(QMainWindow):
                 self._chat_vm.add_system_message(f"Scalar range set to [{min_val:.6g}, {max_val:.6g}].")
             else:
                 self._chat_vm.add_system_message("Failed to set custom scalar range.")
+    
+    def _on_time_series_loaded(self, item) -> None:
+        """Handle time series loaded."""
+        self._time_manager.set_item(item)
+        self._time_animation_widget.update_for_item(
+            item.is_time_series,
+            item.max_time_index,
+            item.current_time_index
+        )
+    
+    def _on_time_step_changed(self, item_id: str, time_index: int) -> None:
+        """Handle time step change from time manager."""
+        self._pipeline_vm.update_time_step(item_id, time_index)
+        self._vtk_vm.request_render()
+        
+        item = self._pipeline_vm.items.get(item_id)
+        if item:
+            self._info_page.setPlainText(item.get_info_string())
+    
+    def _update_time_animation_widget(self, item) -> None:
+        """Update time animation widget for selected item."""
+        if item and item.is_time_series:
+            self._time_manager.set_item(item)
+            self._time_animation_widget.update_for_item(
+                True,
+                item.max_time_index,
+                item.current_time_index
+            )
+        else:
+            self._time_manager.set_item(None)
+            self._time_animation_widget.update_for_item(False, 0, 0)

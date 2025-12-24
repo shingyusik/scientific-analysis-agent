@@ -14,6 +14,7 @@ class PipelineViewModel(QObject):
     item_updated = Signal(object)  # PipelineItem
     selection_changed = Signal(object)  # PipelineItem or None
     message = Signal(str)  # Status messages
+    time_series_loaded = Signal(object)  # PipelineItem with time series
     
     def __init__(self, render_service: VTKRenderService, file_loader: FileLoaderService):
         super().__init__()
@@ -80,9 +81,14 @@ class PipelineViewModel(QObject):
         self._render_service.set_color_by(actor, "Elevation")
         return item
     
-    def load_file(self, file_path: str) -> Optional[PipelineItem]:
+    def load_file(self, file_path: str, check_time_series: bool = True) -> Optional[PipelineItem]:
         """Load a VTK file and add to pipeline."""
         try:
+            if check_time_series:
+                series_files = self._file_loader.detect_time_series(file_path)
+                if series_files and len(series_files) > 1:
+                    return self.load_time_series(series_files)
+            
             self.message.emit(f"Loading {file_path}...")
             data, filename = self._file_loader.load(file_path)
             actor = self._render_service.create_actor_for_file(data)
@@ -99,6 +105,58 @@ class PipelineViewModel(QObject):
         except Exception as e:
             self.message.emit(f"Error loading file: {e}")
             return None
+    
+    def load_time_series(self, file_paths: List[str]) -> Optional[PipelineItem]:
+        """Load a time series of VTK files and add to pipeline."""
+        try:
+            self.message.emit(f"Loading time series ({len(file_paths)} files)...")
+            
+            data_list, series_name = self._file_loader.load_time_series(file_paths)
+            
+            first_data = data_list[0]
+            actor = self._render_service.create_actor_for_file(first_data)
+            
+            mapper = actor.GetMapper()
+            if mapper:
+                mapper.CreateDefaultLookupTable()
+                if first_data.GetScalarRange():
+                    mapper.SetScalarRange(first_data.GetScalarRange())
+            
+            item = PipelineItem(
+                name=series_name,
+                item_type="time_series_source",
+                vtk_data=first_data,
+                actor=actor,
+                is_time_series=True,
+                time_steps=data_list,
+                time_file_paths=file_paths,
+                current_time_index=0,
+            )
+            self._items[item.id] = item
+            self.item_added.emit(item)
+            self.time_series_loaded.emit(item)
+            
+            self.message.emit(f"Loaded time series: {series_name} ({len(file_paths)} steps)")
+            return item
+        except Exception as e:
+            self.message.emit(f"Error loading time series: {e}")
+            return None
+    
+    def update_time_step(self, item_id: str, time_index: int) -> None:
+        """Update item to show specific time step."""
+        item = self._items.get(item_id)
+        if not item or not item.is_time_series:
+            return
+        
+        item.set_time_index(time_index)
+        
+        if item.actor and item.vtk_data:
+            mapper = item.actor.GetMapper()
+            if mapper:
+                mapper.SetInputData(item.vtk_data)
+                mapper.Modified()
+        
+        self.item_updated.emit(item)
     
     def apply_filter(self, filter_type: str, parent_id: str, 
                      params: dict = None) -> Optional[PipelineItem]:

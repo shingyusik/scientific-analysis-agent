@@ -324,6 +324,7 @@ class VTKWidget(QWidget):
             sb_actor.SetLookupTable(lut)
             sb_actor.SetTitle(scalar_name)
             sb_actor.SetNumberOfLabels(5)
+            sb_actor.SetVerticalTitleSeparation(12)
             
             sb_rep = self.scalar_bar_widget.GetRepresentation()
             sb_rep.SetPosition(0.9, 0.3)

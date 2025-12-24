@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, List
 import uuid
 
 
@@ -16,9 +16,46 @@ class PipelineItem:
     parent_id: str | None = None
     filter_params: dict = field(default_factory=dict)
     
+    is_time_series: bool = False
+    time_steps: List[Any] = field(default_factory=list)
+    time_file_paths: List[str] = field(default_factory=list)
+    current_time_index: int = 0
+    
+    @property
+    def time_step_count(self) -> int:
+        """Get total number of time steps."""
+        return len(self.time_steps) if self.time_steps else 0
+    
+    @property
+    def max_time_index(self) -> int:
+        """Get maximum valid time index."""
+        return max(0, self.time_step_count - 1)
+    
+    def set_time_index(self, index: int) -> bool:
+        """
+        Set current time index and update vtk_data.
+        
+        Returns:
+            True if index changed, False otherwise
+        """
+        if not self.is_time_series or not self.time_steps:
+            return False
+        
+        index = max(0, min(index, self.max_time_index))
+        if index == self.current_time_index:
+            return False
+        
+        self.current_time_index = index
+        self.vtk_data = self.time_steps[index]
+        return True
+    
     def get_info_string(self) -> str:
         """Generate information string about this item."""
         lines = [f"Name: {self.name}", f"Type: {self.item_type}"]
+        
+        if self.is_time_series:
+            lines.append(f"Time Series: {self.time_step_count} steps")
+            lines.append(f"Current Step: {self.current_time_index}")
         
         if self.vtk_data:
             try:
