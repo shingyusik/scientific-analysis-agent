@@ -18,6 +18,7 @@ class VTKViewModel(QObject):
     plane_preview_hide_requested = Signal()
     scalar_bar_update_requested = Signal(object)  # actor
     scalar_bar_hide_requested = Signal()
+    legend_settings_changed = Signal(dict)  # legend settings dictionary
     
     BACKGROUND_PRESETS = [
         ("Warm Gray (Default)", (0.32, 0.34, 0.43), None),
@@ -103,6 +104,11 @@ class VTKViewModel(QObject):
     def hide_scalar_bar(self) -> None:
         """Request to hide scalar bar."""
         self.scalar_bar_hide_requested.emit()
+    
+    def set_legend_settings(self, settings: dict) -> None:
+        """Request legend settings update."""
+        self.legend_settings_changed.emit(settings)
+        self.render_requested.emit()
     
     def get_representation_style(self, actor: Any) -> str:
         """Get actor's current representation style."""

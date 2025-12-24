@@ -236,6 +236,7 @@ class MainWindow(QMainWindow):
         self._properties_panel.gaussian_scale_changed.connect(self._pipeline_vm.set_gaussian_scale)
         self._properties_panel.color_by_changed.connect(self._on_color_by_changed)
         self._properties_panel.filter_params_changed.connect(self._on_filter_params_changed)
+        self._properties_panel.legend_settings_changed.connect(self._vtk_vm.set_legend_settings)
         
         self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
         self._chat_vm.message_added.connect(
@@ -254,6 +255,7 @@ class MainWindow(QMainWindow):
         self._vtk_vm.plane_preview_hide_requested.connect(self._vtk_widget.hide_plane_preview)
         self._vtk_vm.scalar_bar_update_requested.connect(self._vtk_widget.update_scalar_bar)
         self._vtk_vm.scalar_bar_hide_requested.connect(self._vtk_widget.hide_scalar_bar)
+        self._vtk_vm.legend_settings_changed.connect(self._vtk_widget.apply_legend_settings)
         
         self._time_manager.time_changed.connect(self._on_time_step_changed)
     

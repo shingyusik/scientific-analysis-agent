@@ -47,6 +47,17 @@ class VTKWidget(QWidget):
         self._setup_scalar_bar()
         self._setup_plane_preview()
         
+        self._legend_settings = {
+            "font_size": 12,
+            "font_color": (1.0, 1.0, 1.0),
+            "bold": True,
+            "italic": False,
+            "position_x": 0.9,
+            "position_y": 0.3,
+            "width": 0.08,
+            "height": 0.4
+        }
+        
         self.vtk_widget.Start()
         self.initialized.emit()
     
@@ -320,22 +331,38 @@ class VTKWidget(QWidget):
             lut.SetRange(rng[0], rng[1])
             lut.Modified()
             
-            sb_actor = self.scalar_bar_widget.GetScalarBarActor()
-            sb_actor.SetLookupTable(lut)
-            sb_actor.SetTitle(scalar_name)
-            sb_actor.SetNumberOfLabels(5)
-            sb_actor.SetVerticalTitleSeparation(12)
+            settings = self._legend_settings
+            
+            self.scalar_bar_widget.Off()
+            
+            new_sb_actor = vtk.vtkScalarBarActor()
+            new_sb_actor.SetLookupTable(lut)
+            new_sb_actor.SetTitle(scalar_name)
+            new_sb_actor.SetNumberOfLabels(5)
+            new_sb_actor.SetVerticalTitleSeparation(12)
+            new_sb_actor.SetUnconstrainedFontSize(True)
+            
+            title_prop = new_sb_actor.GetTitleTextProperty()
+            title_prop.SetColor(*settings["font_color"])
+            title_prop.SetFontSize(settings["font_size"])
+            title_prop.ShadowOn()
+            title_prop.SetBold(settings["bold"])
+            title_prop.SetItalic(settings["italic"])
+            title_prop.SetFontFamilyToTimes()
+            
+            label_prop = new_sb_actor.GetLabelTextProperty()
+            label_prop.SetColor(*settings["font_color"])
+            label_prop.SetFontSize(settings["font_size"])
+            label_prop.ShadowOn()
+            label_prop.SetBold(settings["bold"])
+            label_prop.SetItalic(settings["italic"])
+            label_prop.SetFontFamilyToTimes()
+            
+            self.scalar_bar_widget.SetScalarBarActor(new_sb_actor)
             
             sb_rep = self.scalar_bar_widget.GetRepresentation()
-            sb_rep.SetPosition(0.9, 0.3)
-            sb_rep.SetPosition2(0.08, 0.4)
-            
-            for p in [sb_actor.GetTitleTextProperty(), sb_actor.GetLabelTextProperty()]:
-                p.SetColor(1, 1, 1)
-                p.ShadowOn()
-                p.BoldOn()
-                p.ItalicOff()
-                p.SetFontFamilyToArial()
+            sb_rep.SetPosition(settings["position_x"], settings["position_y"])
+            sb_rep.SetPosition2(settings["width"], settings["height"])
             
             self._current_scalar_bar_actor = actor
             self.scalar_bar_widget.On()
@@ -349,6 +376,16 @@ class VTKWidget(QWidget):
             self.scalar_bar_widget.Off()
             self._current_scalar_bar_actor = None
             self.render()
+    
+    def apply_legend_settings(self, settings: dict) -> None:
+        """Apply legend (scalar bar) settings."""
+        self._legend_settings.update(settings)
+        
+        if not self.scalar_bar_widget:
+            return
+        
+        if self._current_scalar_bar_actor:
+            self.update_scalar_bar(self._current_scalar_bar_actor)
     
     def set_actor_visibility(self, actor: Any, visible: bool) -> None:
         """Set actor visibility."""

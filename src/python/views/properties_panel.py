@@ -1,7 +1,9 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QScrollArea, QGroupBox, 
                                QFormLayout, QHBoxLayout, QLabel, QPushButton,
-                               QSlider, QSpinBox, QComboBox)
+                               QSlider, QSpinBox, QComboBox, QCheckBox,
+                               QDoubleSpinBox, QColorDialog)
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from typing import Optional, List, Tuple, TYPE_CHECKING
 from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox
@@ -20,6 +22,7 @@ class PropertiesPanel(QWidget):
     gaussian_scale_changed = Signal(str, float)  # item_id, value
     color_by_changed = Signal(str, str, str, str)  # item_id, array_name, array_type, component
     filter_params_changed = Signal(str, dict)  # item_id, params (general purpose)
+    legend_settings_changed = Signal(dict)  # legend settings dictionary
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -29,6 +32,16 @@ class PropertiesPanel(QWidget):
         self._parent_bounds: Optional[Tuple[float, ...]] = None
         self._render_service: Optional["VTKRenderService"] = None
         self._filter_widget: Optional[QWidget] = None
+        self._legend_settings: dict = {
+            "font_size": 12,
+            "font_color": (1.0, 1.0, 1.0),
+            "bold": True,
+            "italic": False,
+            "position_x": 0.9,
+            "position_y": 0.3,
+            "width": 0.08,
+            "height": 0.4
+        }
         
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
@@ -87,6 +100,9 @@ class PropertiesPanel(QWidget):
             self._add_color_by_section(current_array, scalar_visible)
         
         self._add_styling_section()
+        
+        if scalar_visible:
+            self._add_legend_section()
         
         if "filter" in item.item_type:
             self._add_filter_params_section(item)
@@ -371,3 +387,91 @@ class PropertiesPanel(QWidget):
         row.addWidget(spin)
         row.addWidget(reset_btn)
         layout.addRow("Sphere Radius:", row)
+    
+    def _add_legend_section(self) -> None:
+        """Add legend (scalar bar) settings section."""
+        group = QGroupBox("Legend Settings")
+        layout = QFormLayout(group)
+        
+        settings = self._legend_settings
+        
+        font_size_spin = QSpinBox()
+        font_size_spin.setRange(8, 72)
+        font_size_spin.setValue(settings["font_size"])
+        font_size_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("font_size", v))
+        layout.addRow("Font Size:", font_size_spin)
+        
+        color_row = QHBoxLayout()
+        self._font_color_btn = QPushButton()
+        self._update_color_button_style(settings["font_color"])
+        self._font_color_btn.setFixedSize(60, 25)
+        self._font_color_btn.clicked.connect(self._on_font_color_clicked)
+        color_row.addWidget(self._font_color_btn)
+        color_row.addStretch()
+        layout.addRow("Font Color:", color_row)
+        
+        bold_check = QCheckBox()
+        bold_check.setChecked(settings["bold"])
+        bold_check.checkStateChanged.connect(lambda s: self._on_legend_setting_changed("bold", s == Qt.CheckState.Checked))
+        layout.addRow("Bold:", bold_check)
+        
+        italic_check = QCheckBox()
+        italic_check.setChecked(settings["italic"])
+        italic_check.checkStateChanged.connect(lambda s: self._on_legend_setting_changed("italic", s == Qt.CheckState.Checked))
+        layout.addRow("Italic:", italic_check)
+        
+        pos_x_spin = QDoubleSpinBox()
+        pos_x_spin.setRange(0.0, 1.0)
+        pos_x_spin.setSingleStep(0.05)
+        pos_x_spin.setDecimals(2)
+        pos_x_spin.setValue(settings["position_x"])
+        pos_x_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("position_x", v))
+        layout.addRow("Position X:", pos_x_spin)
+        
+        pos_y_spin = QDoubleSpinBox()
+        pos_y_spin.setRange(0.0, 1.0)
+        pos_y_spin.setSingleStep(0.05)
+        pos_y_spin.setDecimals(2)
+        pos_y_spin.setValue(settings["position_y"])
+        pos_y_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("position_y", v))
+        layout.addRow("Position Y:", pos_y_spin)
+        
+        width_spin = QDoubleSpinBox()
+        width_spin.setRange(0.01, 0.5)
+        width_spin.setSingleStep(0.01)
+        width_spin.setDecimals(2)
+        width_spin.setValue(settings["width"])
+        width_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("width", v))
+        layout.addRow("Width:", width_spin)
+        
+        height_spin = QDoubleSpinBox()
+        height_spin.setRange(0.1, 0.9)
+        height_spin.setSingleStep(0.05)
+        height_spin.setDecimals(2)
+        height_spin.setValue(settings["height"])
+        height_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("height", v))
+        layout.addRow("Height:", height_spin)
+        
+        self._layout.addWidget(group)
+    
+    def _update_color_button_style(self, color: Tuple[float, float, float]) -> None:
+        """Update the color button background to reflect the current color."""
+        r, g, b = int(color[0] * 255), int(color[1] * 255), int(color[2] * 255)
+        self._font_color_btn.setStyleSheet(
+            f"background-color: rgb({r}, {g}, {b}); border: 1px solid #555;"
+        )
+    
+    def _on_font_color_clicked(self) -> None:
+        """Handle font color button click."""
+        current = self._legend_settings["font_color"]
+        initial = QColor(int(current[0] * 255), int(current[1] * 255), int(current[2] * 255))
+        color = QColorDialog.getColor(initial, self, "Select Font Color")
+        if color.isValid():
+            new_color = (color.redF(), color.greenF(), color.blueF())
+            self._update_color_button_style(new_color)
+            self._on_legend_setting_changed("font_color", new_color)
+    
+    def _on_legend_setting_changed(self, key: str, value) -> None:
+        """Handle legend setting change."""
+        self._legend_settings[key] = value
+        self.legend_settings_changed.emit(self._legend_settings.copy())
