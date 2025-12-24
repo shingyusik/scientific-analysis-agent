@@ -7,6 +7,7 @@ from PySide6.QtGui import QColor
 from typing import Optional, List, Tuple, TYPE_CHECKING
 from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox
+from views.vtk_widget import DEFAULT_LEGEND_SETTINGS
 
 if TYPE_CHECKING:
     from services.vtk_render_service import VTKRenderService
@@ -32,16 +33,7 @@ class PropertiesPanel(QWidget):
         self._parent_bounds: Optional[Tuple[float, ...]] = None
         self._render_service: Optional["VTKRenderService"] = None
         self._filter_widget: Optional[QWidget] = None
-        self._legend_settings: dict = {
-            "font_size": 12,
-            "font_color": (1.0, 1.0, 1.0),
-            "bold": True,
-            "italic": False,
-            "position_x": 0.9,
-            "position_y": 0.3,
-            "width": 0.08,
-            "height": 0.4
-        }
+        self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
         
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)

@@ -13,6 +13,18 @@ except ImportError:
         QVTKRenderWindowInteractor = None
 
 
+DEFAULT_LEGEND_SETTINGS = {
+    "font_size": 12,
+    "font_color": (1.0, 1.0, 1.0),
+    "bold": True,
+    "italic": False,
+    "position_x": 0.9,
+    "position_y": 0.3,
+    "width": 0.08,
+    "height": 0.4
+}
+
+
 class VTKWidget(QWidget):
     """VTK rendering widget - handles only rendering and display."""
     
@@ -47,16 +59,7 @@ class VTKWidget(QWidget):
         self._setup_scalar_bar()
         self._setup_plane_preview()
         
-        self._legend_settings = {
-            "font_size": 12,
-            "font_color": (1.0, 1.0, 1.0),
-            "bold": True,
-            "italic": False,
-            "position_x": 0.9,
-            "position_y": 0.3,
-            "width": 0.08,
-            "height": 0.4
-        }
+        self._legend_settings = DEFAULT_LEGEND_SETTINGS.copy()
         
         self.vtk_widget.Start()
         self.initialized.emit()
@@ -281,6 +284,15 @@ class VTKWidget(QWidget):
             self._preview_arrow_actor.VisibilityOff()
         self.render()
     
+    def _apply_text_property(self, prop: Any, settings: dict) -> None:
+        """Apply legend settings to a vtkTextProperty."""
+        prop.SetColor(*settings["font_color"])
+        prop.SetFontSize(settings["font_size"])
+        prop.ShadowOn()
+        prop.SetBold(settings["bold"])
+        prop.SetItalic(settings["italic"])
+        prop.SetFontFamilyToTimes()
+    
     def update_scalar_bar(self, actor: Any, title: str = None) -> None:
         """Update scalar bar for actor."""
         if not actor or not self.scalar_bar_widget:
@@ -342,21 +354,8 @@ class VTKWidget(QWidget):
             new_sb_actor.SetVerticalTitleSeparation(12)
             new_sb_actor.SetUnconstrainedFontSize(True)
             
-            title_prop = new_sb_actor.GetTitleTextProperty()
-            title_prop.SetColor(*settings["font_color"])
-            title_prop.SetFontSize(settings["font_size"])
-            title_prop.ShadowOn()
-            title_prop.SetBold(settings["bold"])
-            title_prop.SetItalic(settings["italic"])
-            title_prop.SetFontFamilyToTimes()
-            
-            label_prop = new_sb_actor.GetLabelTextProperty()
-            label_prop.SetColor(*settings["font_color"])
-            label_prop.SetFontSize(settings["font_size"])
-            label_prop.ShadowOn()
-            label_prop.SetBold(settings["bold"])
-            label_prop.SetItalic(settings["italic"])
-            label_prop.SetFontFamilyToTimes()
+            self._apply_text_property(new_sb_actor.GetTitleTextProperty(), settings)
+            self._apply_text_property(new_sb_actor.GetLabelTextProperty(), settings)
             
             self.scalar_bar_widget.SetScalarBarActor(new_sb_actor)
             
