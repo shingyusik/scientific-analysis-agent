@@ -93,8 +93,9 @@ class PropertiesPanel(QWidget):
         
         self._add_styling_section()
         
-        if scalar_visible:
-            self._add_legend_section()
+        if self._data_arrays:
+            legend_enabled = scalar_visible and item.visible
+            self._add_legend_section(legend_enabled)
         
         if "filter" in item.item_type:
             self._add_filter_params_section(item)
@@ -380,9 +381,10 @@ class PropertiesPanel(QWidget):
         row.addWidget(reset_btn)
         layout.addRow("Sphere Radius:", row)
     
-    def _add_legend_section(self) -> None:
+    def _add_legend_section(self, enabled: bool = True) -> None:
         """Add legend (scalar bar) settings section."""
         group = QGroupBox("Legend Settings")
+        group.setEnabled(enabled)
         layout = QFormLayout(group)
         
         settings = self._legend_settings
