@@ -68,10 +68,12 @@ class PipelineBrowserWidget(QTreeWidget):
             self.blockSignals(False)
     
     def select_item(self, item_id: str) -> None:
-        """Select an item in the tree."""
+        """Select an item in the tree without emitting signals."""
         tree_item = self._item_map.get(item_id)
         if tree_item:
+            self.blockSignals(True)
             self.setCurrentItem(tree_item)
+            self.blockSignals(False)
     
     def get_selected_item_id(self) -> Optional[str]:
         """Get the ID of the currently selected item."""

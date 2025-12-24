@@ -230,6 +230,7 @@ class MainWindow(QMainWindow):
         self._pipeline_browser.item_delete_requested.connect(self._on_delete_requested)
         
         self._properties_panel.apply_filter_requested.connect(self._pipeline_vm.commit_filter)
+        self._properties_panel.delete_requested.connect(self._on_delete_requested)
         self._properties_panel.opacity_changed.connect(self._on_opacity_changed)
         self._properties_panel.point_size_changed.connect(self._pipeline_vm.set_point_size)
         self._properties_panel.line_width_changed.connect(self._pipeline_vm.set_line_width)
@@ -334,6 +335,7 @@ class MainWindow(QMainWindow):
     def _on_selection_changed(self, item) -> None:
         """Handle selection change."""
         if item:
+            self._pipeline_browser.select_item(item.id)
             self._update_properties_panel(item)
             self._info_page.setPlainText(item.get_info_string())
             self._update_time_animation_widget(item)

@@ -17,6 +17,7 @@ class PropertiesPanel(QWidget):
     """Panel for displaying and editing item properties."""
     
     apply_filter_requested = Signal(str)  # item_id
+    delete_requested = Signal(str)  # item_id
     opacity_changed = Signal(str, float)  # item_id, value
     point_size_changed = Signal(str, float)  # item_id, value
     line_width_changed = Signal(str, float)  # item_id, value
@@ -35,6 +36,58 @@ class PropertiesPanel(QWidget):
         self._filter_widget: Optional[QWidget] = None
         self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
         
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        btn_row = QHBoxLayout()
+        btn_row.setContentsMargins(4, 4, 4, 4)
+        btn_row.setSpacing(4)
+        
+        self._apply_btn = QPushButton("Apply")
+        self._apply_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2c3e50;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 4px;
+            }
+            QPushButton:hover:enabled { background-color: #34495e; }
+            QPushButton:pressed:enabled { background-color: #1a252f; }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #999;
+            }
+        """)
+        self._apply_btn.setCursor(Qt.PointingHandCursor)
+        self._apply_btn.clicked.connect(self._on_apply_clicked)
+        self._apply_btn.setEnabled(False)
+        btn_row.addWidget(self._apply_btn)
+        
+        self._delete_btn = QPushButton("Delete")
+        self._delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #c0392b;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 4px;
+            }
+            QPushButton:hover:enabled { background-color: #e74c3c; }
+            QPushButton:pressed:enabled { background-color: #a93226; }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #999;
+            }
+        """)
+        self._delete_btn.setCursor(Qt.PointingHandCursor)
+        self._delete_btn.clicked.connect(self._on_delete_clicked)
+        self._delete_btn.setEnabled(False)
+        btn_row.addWidget(self._delete_btn)
+        
+        main_layout.addLayout(btn_row)
+        
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         
@@ -43,9 +96,6 @@ class PropertiesPanel(QWidget):
         self._layout.setAlignment(Qt.AlignTop)
         
         self._scroll.setWidget(self._content)
-        
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(self._scroll)
     
     def set_render_service(self, render_service: "VTKRenderService") -> None:
@@ -78,17 +128,21 @@ class PropertiesPanel(QWidget):
         self._filter_widget = None
         
         if not self._current_item:
+            self._apply_btn.setEnabled(False)
+            self._delete_btn.setEnabled(False)
             self._layout.addWidget(QLabel("No item selected."))
             return
         
         item = self._current_item
         
         if not item.actor:
+            self._apply_btn.setEnabled(False)
+            self._delete_btn.setEnabled(False)
             self._layout.addWidget(QLabel("No styling properties available for this source."))
             return
         
-        if "filter" in item.item_type:
-            self._add_apply_button()
+        self._apply_btn.setEnabled("filter" in item.item_type)
+        self._delete_btn.setEnabled(True)
         
         if self._data_arrays:
             self._add_color_by_section(current_array, current_component, scalar_visible)
@@ -214,28 +268,15 @@ class PropertiesPanel(QWidget):
         layout.addWidget(component_combo)
         self._layout.addWidget(group)
     
-    def _add_apply_button(self) -> None:
-        """Add apply button for filters."""
-        btn = QPushButton("Apply")
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2c3e50;
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #34495e; }
-            QPushButton:pressed { background-color: #1a252f; }
-        """)
-        btn.setCursor(Qt.PointingHandCursor)
-        btn.clicked.connect(self._on_apply_clicked)
-        self._layout.addWidget(btn)
-    
     def _on_apply_clicked(self) -> None:
         """Handle apply button click."""
         if self._current_item:
             self.apply_filter_requested.emit(self._current_item.id)
+    
+    def _on_delete_clicked(self) -> None:
+        """Handle delete button click."""
+        if self._current_item:
+            self.delete_requested.emit(self._current_item.id)
     
     def _add_styling_section(self) -> None:
         """Add styling controls section."""
