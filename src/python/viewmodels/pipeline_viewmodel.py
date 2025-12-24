@@ -103,6 +103,8 @@ class PipelineViewModel(QObject):
     def apply_filter(self, filter_type: str, parent_id: str, 
                      params: dict = None) -> Optional[PipelineItem]:
         """Apply a filter to a parent item using the filter registry."""
+        import vtk
+        
         parent = self._items.get(parent_id)
         if not parent or not parent.vtk_data:
             self.message.emit("Please select a valid source.")
@@ -120,7 +122,15 @@ class PipelineViewModel(QObject):
                 if 'origin' in params:
                     params['origin'] = list(center)
         
-        actor, filtered_data = filter_instance.apply_filter(parent.vtk_data, params)
+        if filter_instance.apply_immediately:
+            actor, filtered_data = filter_instance.apply_filter(parent.vtk_data, params)
+        else:
+            mapper = vtk.vtkDataSetMapper()
+            mapper.SetInputData(parent.vtk_data)
+            actor = vtk.vtkActor()
+            actor.SetMapper(mapper)
+            actor.GetProperty().SetColor(1, 1, 1)
+            filtered_data = parent.vtk_data
         
         item = PipelineItem(
             name=f"{filter_instance.display_name} ({parent.name})",
@@ -132,7 +142,11 @@ class PipelineViewModel(QObject):
         )
         self._items[item.id] = item
         self.item_added.emit(item)
-        self.message.emit(f"Applied {filter_instance.display_name} filter to {parent.name}.")
+        
+        if filter_instance.apply_immediately:
+            self.message.emit(f"Applied {filter_instance.display_name} filter to {parent.name}.")
+        else:
+            self.message.emit(f"Created {filter_instance.display_name} filter. Click Apply to execute.")
         return item
     
     def update_filter_params(self, item_id: str, params: dict) -> None:

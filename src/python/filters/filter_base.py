@@ -13,6 +13,13 @@ class FilterBase(ABC):
         self._render_service = render_service
     
     @property
+    def apply_immediately(self) -> bool:
+        """Whether to apply filter immediately on creation.
+        If False, parent data is shown until Apply button is clicked.
+        """
+        return True
+    
+    @property
     @abstractmethod
     def filter_type(self) -> str:
         """Return the filter type identifier (e.g., 'slice_filter')."""

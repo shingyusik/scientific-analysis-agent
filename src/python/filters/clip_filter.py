@@ -34,6 +34,10 @@ class ClipFilter(FilterBase):
     """Clip filter implementation - example of how easy it is to add a new filter."""
     
     @property
+    def apply_immediately(self) -> bool:
+        return False
+    
+    @property
     def filter_type(self) -> str:
         return "clip_filter"
     

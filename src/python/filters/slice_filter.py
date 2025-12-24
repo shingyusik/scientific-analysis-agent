@@ -50,6 +50,10 @@ class SliceFilter(FilterBase):
         self._offset_widget: Optional[OffsetListWidget] = None
     
     @property
+    def apply_immediately(self) -> bool:
+        return False
+    
+    @property
     def filter_type(self) -> str:
         return "slice_filter"
     
