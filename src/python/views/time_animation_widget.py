@@ -40,28 +40,24 @@ class TimeAnimationWidget(QWidget):
         self._btn_first.setToolTip("Go to first step")
         layout.addWidget(self._btn_first)
         
-        self._btn_step_back = QPushButton("◀|")
+        self._btn_step_back = QPushButton("◀")
         self._btn_step_back.setStyleSheet(btn_style)
         self._btn_step_back.setToolTip("Previous step")
         layout.addWidget(self._btn_step_back)
         
-        self._btn_back = QPushButton("◀")
-        self._btn_back.setStyleSheet(btn_style)
-        self._btn_back.setToolTip("Step backward")
-        layout.addWidget(self._btn_back)
+        self._btn_play_back = QPushButton("◀")
+        self._btn_play_back.setStyleSheet(btn_style)
+        self._btn_play_back.setToolTip("Play backward")
+        self._btn_play_back.setCheckable(True)
+        layout.addWidget(self._btn_play_back)
         
-        self._btn_play = QPushButton("▶")
-        self._btn_play.setStyleSheet(btn_style)
-        self._btn_play.setToolTip("Play/Pause")
-        self._btn_play.setCheckable(True)
-        layout.addWidget(self._btn_play)
+        self._btn_play_forward = QPushButton("▶")
+        self._btn_play_forward.setStyleSheet(btn_style)
+        self._btn_play_forward.setToolTip("Play forward")
+        self._btn_play_forward.setCheckable(True)
+        layout.addWidget(self._btn_play_forward)
         
-        self._btn_forward = QPushButton("▶")
-        self._btn_forward.setStyleSheet(btn_style)
-        self._btn_forward.setToolTip("Step forward")
-        layout.addWidget(self._btn_forward)
-        
-        self._btn_step_forward = QPushButton("|▶")
+        self._btn_step_forward = QPushButton("▶")
         self._btn_step_forward.setStyleSheet(btn_style)
         self._btn_step_forward.setToolTip("Next step")
         layout.addWidget(self._btn_step_forward)
@@ -103,9 +99,8 @@ class TimeAnimationWidget(QWidget):
         """Connect widget signals to handlers."""
         self._btn_first.clicked.connect(self._time_manager.go_to_first)
         self._btn_step_back.clicked.connect(self._time_manager.step_backward)
-        self._btn_back.clicked.connect(self._time_manager.step_backward)
-        self._btn_play.clicked.connect(self._on_play_clicked)
-        self._btn_forward.clicked.connect(self._time_manager.step_forward)
+        self._btn_play_back.clicked.connect(self._on_play_back_clicked)
+        self._btn_play_forward.clicked.connect(self._on_play_forward_clicked)
         self._btn_step_forward.clicked.connect(self._time_manager.step_forward)
         self._btn_last.clicked.connect(self._time_manager.go_to_last)
         self._btn_loop.clicked.connect(self._on_loop_clicked)
@@ -116,9 +111,13 @@ class TimeAnimationWidget(QWidget):
         self._time_manager.time_changed.connect(self._on_time_changed)
         self._time_manager.animation_state_changed.connect(self._on_animation_state_changed)
     
-    def _on_play_clicked(self) -> None:
-        """Handle play button click."""
-        self._time_manager.toggle_play_pause()
+    def _on_play_forward_clicked(self) -> None:
+        """Handle play forward button click."""
+        self._time_manager.toggle_play_forward()
+    
+    def _on_play_back_clicked(self) -> None:
+        """Handle play backward button click."""
+        self._time_manager.toggle_play_backward()
     
     def _on_loop_clicked(self) -> None:
         """Handle loop button click."""
@@ -146,15 +145,24 @@ class TimeAnimationWidget(QWidget):
         
         self.time_index_changed.emit(time_index)
     
-    def _on_animation_state_changed(self, is_playing: bool) -> None:
+    def _on_animation_state_changed(self, is_playing: bool, is_forward: bool) -> None:
         """Handle animation state change."""
-        self._btn_play.setChecked(is_playing)
         if is_playing:
-            self._btn_play.setText("⏸")
-            self._btn_play.setToolTip("Pause")
+            if is_forward:
+                self._btn_play_forward.setChecked(True)
+                self._btn_play_forward.setText("⏸")
+                self._btn_play_back.setChecked(False)
+                self._btn_play_back.setText("◀")
+            else:
+                self._btn_play_back.setChecked(True)
+                self._btn_play_back.setText("⏸")
+                self._btn_play_forward.setChecked(False)
+                self._btn_play_forward.setText("▶")
         else:
-            self._btn_play.setText("▶")
-            self._btn_play.setToolTip("Play")
+            self._btn_play_forward.setChecked(False)
+            self._btn_play_forward.setText("▶")
+            self._btn_play_back.setChecked(False)
+            self._btn_play_back.setText("◀")
     
     def update_for_item(self, has_time_series: bool, max_index: int, current_index: int) -> None:
         """Update widget state for a pipeline item."""
@@ -187,9 +195,8 @@ class TimeAnimationWidget(QWidget):
         
         self._btn_first.setEnabled(has_series)
         self._btn_step_back.setEnabled(has_series)
-        self._btn_back.setEnabled(has_series)
-        self._btn_play.setEnabled(has_series)
-        self._btn_forward.setEnabled(has_series)
+        self._btn_play_back.setEnabled(has_series)
+        self._btn_play_forward.setEnabled(has_series)
         self._btn_step_forward.setEnabled(has_series)
         self._btn_last.setEnabled(has_series)
         self._btn_loop.setEnabled(has_series)

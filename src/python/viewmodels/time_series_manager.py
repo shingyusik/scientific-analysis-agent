@@ -7,7 +7,7 @@ class TimeSeriesManager(QObject):
     """Manages time series animation and playback."""
     
     time_changed = Signal(str, int)  # item_id, time_index
-    animation_state_changed = Signal(bool)  # is_playing
+    animation_state_changed = Signal(bool, bool)  # is_playing, is_forward
     
     DEFAULT_INTERVAL_MS = 100
     
@@ -15,6 +15,7 @@ class TimeSeriesManager(QObject):
         super().__init__(parent)
         self._current_item: Optional[PipelineItem] = None
         self._is_playing = False
+        self._play_forward = True
         self._loop_enabled = False
         self._interval_ms = self.DEFAULT_INTERVAL_MS
         
@@ -28,6 +29,10 @@ class TimeSeriesManager(QObject):
     @property
     def is_playing(self) -> bool:
         return self._is_playing
+    
+    @property
+    def is_playing_forward(self) -> bool:
+        return self._play_forward
     
     @property
     def loop_enabled(self) -> bool:
@@ -70,20 +75,45 @@ class TimeSeriesManager(QObject):
         if self._is_playing:
             self._timer.setInterval(self._interval_ms)
     
-    def play(self) -> None:
-        """Start animation playback."""
+    def play_forward(self) -> None:
+        """Start forward animation playback."""
         if not self.has_time_series:
             return
         
-        if self._is_playing:
+        if self._is_playing and self._play_forward:
             return
+        
+        if self._is_playing:
+            self._timer.stop()
+        
+        self._play_forward = True
         
         if self.current_index >= self.max_index and not self._loop_enabled:
             self.go_to_first()
         
         self._is_playing = True
         self._timer.start(self._interval_ms)
-        self.animation_state_changed.emit(True)
+        self.animation_state_changed.emit(True, True)
+    
+    def play_backward(self) -> None:
+        """Start backward animation playback."""
+        if not self.has_time_series:
+            return
+        
+        if self._is_playing and not self._play_forward:
+            return
+        
+        if self._is_playing:
+            self._timer.stop()
+        
+        self._play_forward = False
+        
+        if self.current_index <= 0 and not self._loop_enabled:
+            self.go_to_last()
+        
+        self._is_playing = True
+        self._timer.start(self._interval_ms)
+        self.animation_state_changed.emit(True, False)
     
     def pause(self) -> None:
         """Pause animation playback."""
@@ -92,14 +122,21 @@ class TimeSeriesManager(QObject):
         
         self._is_playing = False
         self._timer.stop()
-        self.animation_state_changed.emit(False)
+        self.animation_state_changed.emit(False, self._play_forward)
     
-    def toggle_play_pause(self) -> None:
-        """Toggle between play and pause."""
-        if self._is_playing:
+    def toggle_play_forward(self) -> None:
+        """Toggle forward play and pause."""
+        if self._is_playing and self._play_forward:
             self.pause()
         else:
-            self.play()
+            self.play_forward()
+    
+    def toggle_play_backward(self) -> None:
+        """Toggle backward play and pause."""
+        if self._is_playing and not self._play_forward:
+            self.pause()
+        else:
+            self.play_backward()
     
     def go_to_first(self) -> None:
         """Go to first time step."""
@@ -151,14 +188,22 @@ class TimeSeriesManager(QObject):
             self.pause()
             return
         
-        new_index = self.current_index + 1
-        
-        if new_index > self.max_index:
-            if self._loop_enabled:
-                new_index = 0
-            else:
-                self.pause()
-                return
+        if self._play_forward:
+            new_index = self.current_index + 1
+            if new_index > self.max_index:
+                if self._loop_enabled:
+                    new_index = 0
+                else:
+                    self.pause()
+                    return
+        else:
+            new_index = self.current_index - 1
+            if new_index < 0:
+                if self._loop_enabled:
+                    new_index = self.max_index
+                else:
+                    self.pause()
+                    return
         
         self.set_time_index(new_index)
 
