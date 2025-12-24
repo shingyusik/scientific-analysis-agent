@@ -25,7 +25,8 @@ class PipelineItem:
     vtk_data: Any = None
     actor: Any = None
     visible: bool = True
-    parent_id: str | None = None
+    parent_id: str | None = None  # Actual data input source (for filter logic)
+    display_parent_id: str | None = None  # UI tree parent (for display hierarchy)
     filter_params: dict = field(default_factory=dict)
     color_by: ColorByInfo = field(default_factory=ColorByInfo)
     

@@ -328,3 +328,17 @@ class PipelineViewModel(QObject):
             item for item in self._items.values()
             if item.parent_id == item_id
         ]
+    
+    def get_root_source_id(self, item_id: str) -> Optional[str]:
+        """Get the root source ID for an item by traversing up the parent chain."""
+        item = self._items.get(item_id)
+        if not item:
+            return None
+        
+        while item.parent_id:
+            parent = self._items.get(item.parent_id)
+            if not parent:
+                break
+            item = parent
+        
+        return item.id

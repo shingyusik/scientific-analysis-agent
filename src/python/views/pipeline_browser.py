@@ -16,6 +16,7 @@ class PipelineBrowserWidget(QTreeWidget):
         self.setHeaderLabel("Pipeline Browser")
         
         self._item_map: Dict[str, QTreeWidgetItem] = {}
+        self._all_items: Dict[str, PipelineItem] = {}
         
         self.itemChanged.connect(self._on_item_changed)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -23,43 +24,60 @@ class PipelineBrowserWidget(QTreeWidget):
         self.itemSelectionChanged.connect(self._on_selection_changed)
     
     def add_item(self, pipeline_item: PipelineItem) -> QTreeWidgetItem:
-        """Add a pipeline item to the tree."""
-        if pipeline_item.parent_id and pipeline_item.parent_id in self._item_map:
-            parent_widget = self._item_map[pipeline_item.parent_id]
-            tree_item = QTreeWidgetItem(parent_widget)
-            parent_widget.setExpanded(True)
+        """Add a pipeline item and rebuild tree to maintain correct order."""
+        self._all_items[pipeline_item.id] = pipeline_item
+        self._rebuild_tree()
+        return self._item_map.get(pipeline_item.id)
+    
+    def _rebuild_tree(self) -> None:
+        """Rebuild entire tree based on branching logic."""
+        selected_id = self.get_selected_item_id()
+        
+        self.blockSignals(True)
+        self.clear()
+        self._item_map.clear()
+        
+        roots = [item for item in self._all_items.values() if not item.parent_id]
+        for root in roots:
+            self._add_item_recursive(root, None)
+        
+        self.blockSignals(False)
+        
+        if selected_id and selected_id in self._item_map:
+            self.setCurrentItem(self._item_map[selected_id])
+    
+    def _add_item_recursive(self, item: PipelineItem, ui_parent: Optional[QTreeWidgetItem]) -> None:
+        """Recursively add item. If only one child, keep same level."""
+        if ui_parent:
+            tree_item = QTreeWidgetItem(ui_parent)
+            ui_parent.setExpanded(True)
         else:
             tree_item = QTreeWidgetItem(self)
         
-        tree_item.setText(0, pipeline_item.name)
-        tree_item.setCheckState(0, Qt.Checked if pipeline_item.visible else Qt.Unchecked)
-        tree_item.setData(0, Qt.UserRole, pipeline_item.id)
+        tree_item.setText(0, item.name)
+        tree_item.setCheckState(0, Qt.Checked if item.visible else Qt.Unchecked)
+        tree_item.setData(0, Qt.UserRole, item.id)
+        self._item_map[item.id] = tree_item
         
-        self._item_map[pipeline_item.id] = tree_item
+        children = [child for child in self._all_items.values() if child.parent_id == item.id]
         
-        if not pipeline_item.parent_id:
-            self.setCurrentItem(tree_item)
-        
-        return tree_item
+        if len(children) == 1:
+            self._add_item_recursive(children[0], ui_parent)
+        else:
+            for child in children:
+                self._add_item_recursive(child, tree_item)
     
     def remove_item(self, item_id: str) -> None:
-        """Remove an item from the tree."""
-        tree_item = self._item_map.get(item_id)
-        if not tree_item:
+        """Remove an item from the tree and rebuild if needed."""
+        if item_id not in self._all_items:
             return
         
-        parent = tree_item.parent()
-        if parent:
-            parent.removeChild(tree_item)
-        else:
-            index = self.indexOfTopLevelItem(tree_item)
-            if index != -1:
-                self.takeTopLevelItem(index)
-        
-        del self._item_map[item_id]
+        del self._all_items[item_id]
+        self._rebuild_tree()
     
     def update_item(self, pipeline_item: PipelineItem) -> None:
         """Update tree item display."""
+        self._all_items[pipeline_item.id] = pipeline_item
         tree_item = self._item_map.get(pipeline_item.id)
         if tree_item:
             tree_item.setText(0, pipeline_item.name)
@@ -86,6 +104,7 @@ class PipelineBrowserWidget(QTreeWidget):
         """Clear all items."""
         self.clear()
         self._item_map.clear()
+        self._all_items.clear()
     
     def _on_item_changed(self, item: QTreeWidgetItem, column: int) -> None:
         """Handle item checkbox changes."""
