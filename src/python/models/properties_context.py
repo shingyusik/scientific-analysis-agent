@@ -24,9 +24,10 @@ class PropertiesPanelContext:
         scalar_visible = False
         
         mapper = item.actor.GetMapper()
-        if mapper:
+        if mapper and mapper.GetScalarVisibility():
             current_array = mapper.GetArrayName()
-            scalar_visible = mapper.GetScalarVisibility()
+            if current_array:
+                scalar_visible = True
         
         return cls(
             style=style,
