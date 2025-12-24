@@ -440,60 +440,61 @@ class PropertiesPanel(QWidget):
         layout.addRow("Italic:", italic_row)
         
         pos_x_row = QHBoxLayout()
-        pos_x_spin = QDoubleSpinBox()
-        pos_x_spin.setRange(0.0, 1.0)
-        pos_x_spin.setSingleStep(0.05)
-        pos_x_spin.setDecimals(2)
-        pos_x_spin.setValue(settings["position_x"])
-        pos_x_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("position_x", v))
+        self._pos_x_spin = QDoubleSpinBox()
+        self._pos_x_spin.setSingleStep(0.05)
+        self._pos_x_spin.setDecimals(2)
+        self._pos_x_spin.setValue(settings["position_x"])
         pos_x_reset = QPushButton("Reset")
         pos_x_reset.setFixedWidth(50)
-        pos_x_reset.clicked.connect(lambda: pos_x_spin.setValue(defaults["position_x"]))
-        pos_x_row.addWidget(pos_x_spin)
+        pos_x_reset.clicked.connect(lambda: self._pos_x_spin.setValue(defaults["position_x"]))
+        pos_x_row.addWidget(self._pos_x_spin)
         pos_x_row.addWidget(pos_x_reset)
         layout.addRow("Position X:", pos_x_row)
         
         pos_y_row = QHBoxLayout()
-        pos_y_spin = QDoubleSpinBox()
-        pos_y_spin.setRange(0.0, 1.0)
-        pos_y_spin.setSingleStep(0.05)
-        pos_y_spin.setDecimals(2)
-        pos_y_spin.setValue(settings["position_y"])
-        pos_y_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("position_y", v))
+        self._pos_y_spin = QDoubleSpinBox()
+        self._pos_y_spin.setSingleStep(0.05)
+        self._pos_y_spin.setDecimals(2)
+        self._pos_y_spin.setValue(settings["position_y"])
         pos_y_reset = QPushButton("Reset")
         pos_y_reset.setFixedWidth(50)
-        pos_y_reset.clicked.connect(lambda: pos_y_spin.setValue(defaults["position_y"]))
-        pos_y_row.addWidget(pos_y_spin)
+        pos_y_reset.clicked.connect(lambda: self._pos_y_spin.setValue(defaults["position_y"]))
+        pos_y_row.addWidget(self._pos_y_spin)
         pos_y_row.addWidget(pos_y_reset)
         layout.addRow("Position Y:", pos_y_row)
         
         width_row = QHBoxLayout()
-        width_spin = QDoubleSpinBox()
-        width_spin.setRange(0.01, 0.5)
-        width_spin.setSingleStep(0.01)
-        width_spin.setDecimals(2)
-        width_spin.setValue(settings["width"])
-        width_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("width", v))
+        self._width_spin = QDoubleSpinBox()
+        self._width_spin.setRange(0.01, 0.5)
+        self._width_spin.setSingleStep(0.01)
+        self._width_spin.setDecimals(2)
+        self._width_spin.setValue(settings["width"])
         width_reset = QPushButton("Reset")
         width_reset.setFixedWidth(50)
-        width_reset.clicked.connect(lambda: width_spin.setValue(defaults["width"]))
-        width_row.addWidget(width_spin)
+        width_reset.clicked.connect(lambda: self._width_spin.setValue(defaults["width"]))
+        width_row.addWidget(self._width_spin)
         width_row.addWidget(width_reset)
         layout.addRow("Width:", width_row)
         
         height_row = QHBoxLayout()
-        height_spin = QDoubleSpinBox()
-        height_spin.setRange(0.1, 0.9)
-        height_spin.setSingleStep(0.05)
-        height_spin.setDecimals(2)
-        height_spin.setValue(settings["height"])
-        height_spin.valueChanged.connect(lambda v: self._on_legend_setting_changed("height", v))
+        self._height_spin = QDoubleSpinBox()
+        self._height_spin.setRange(0.1, 0.9)
+        self._height_spin.setSingleStep(0.05)
+        self._height_spin.setDecimals(2)
+        self._height_spin.setValue(settings["height"])
         height_reset = QPushButton("Reset")
         height_reset.setFixedWidth(50)
-        height_reset.clicked.connect(lambda: height_spin.setValue(defaults["height"]))
-        height_row.addWidget(height_spin)
+        height_reset.clicked.connect(lambda: self._height_spin.setValue(defaults["height"]))
+        height_row.addWidget(self._height_spin)
         height_row.addWidget(height_reset)
         layout.addRow("Height:", height_row)
+        
+        self._update_legend_spinbox_ranges()
+        
+        self._pos_x_spin.valueChanged.connect(self._on_legend_pos_size_changed)
+        self._pos_y_spin.valueChanged.connect(self._on_legend_pos_size_changed)
+        self._width_spin.valueChanged.connect(self._on_legend_pos_size_changed)
+        self._height_spin.valueChanged.connect(self._on_legend_pos_size_changed)
         
         self._layout.addWidget(group)
     
@@ -523,4 +524,40 @@ class PropertiesPanel(QWidget):
     def _on_legend_setting_changed(self, key: str, value) -> None:
         """Handle legend setting change."""
         self._legend_settings[key] = value
+        self.legend_settings_changed.emit(self._legend_settings.copy())
+    
+    def _update_legend_spinbox_ranges(self) -> None:
+        """Update position/size spinbox ranges to prevent legend overflow."""
+        width = self._width_spin.value()
+        height = self._height_spin.value()
+        pos_x = self._pos_x_spin.value()
+        pos_y = self._pos_y_spin.value()
+        
+        self._pos_x_spin.blockSignals(True)
+        self._pos_y_spin.blockSignals(True)
+        self._width_spin.blockSignals(True)
+        self._height_spin.blockSignals(True)
+        
+        self._pos_x_spin.setRange(0.0, max(0.01, 1.0 - width))
+        self._pos_y_spin.setRange(0.0, max(0.01, 1.0 - height))
+        
+        if pos_x > 1.0 - width:
+            self._pos_x_spin.setValue(max(0.0, 1.0 - width))
+        if pos_y > 1.0 - height:
+            self._pos_y_spin.setValue(max(0.0, 1.0 - height))
+        
+        self._pos_x_spin.blockSignals(False)
+        self._pos_y_spin.blockSignals(False)
+        self._width_spin.blockSignals(False)
+        self._height_spin.blockSignals(False)
+    
+    def _on_legend_pos_size_changed(self) -> None:
+        """Handle position/size spinbox value change."""
+        self._update_legend_spinbox_ranges()
+        
+        self._legend_settings["position_x"] = self._pos_x_spin.value()
+        self._legend_settings["position_y"] = self._pos_y_spin.value()
+        self._legend_settings["width"] = self._width_spin.value()
+        self._legend_settings["height"] = self._height_spin.value()
+        
         self.legend_settings_changed.emit(self._legend_settings.copy())

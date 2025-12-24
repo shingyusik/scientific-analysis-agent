@@ -293,23 +293,6 @@ class VTKWidget(QWidget):
         prop.SetItalic(settings["italic"])
         prop.SetFontFamilyToTimes()
     
-    def _clamp_legend_bounds(self, settings: dict) -> Tuple[float, float, float, float]:
-        """Clamp legend position and size to stay within viewport bounds."""
-        pos_x = settings["position_x"]
-        pos_y = settings["position_y"]
-        width = settings["width"]
-        height = settings["height"]
-        
-        if pos_x + width > 1.0:
-            pos_x = max(0.0, 1.0 - width)
-        if pos_y + height > 1.0:
-            pos_y = max(0.0, 1.0 - height)
-        
-        pos_x = max(0.0, min(pos_x, 1.0 - width))
-        pos_y = max(0.0, min(pos_y, 1.0 - height))
-        
-        return pos_x, pos_y, width, height
-    
     def update_scalar_bar(self, actor: Any, title: str = None) -> None:
         """Update scalar bar for actor."""
         if not actor or not self.scalar_bar_widget:
@@ -377,9 +360,8 @@ class VTKWidget(QWidget):
             self.scalar_bar_widget.SetScalarBarActor(new_sb_actor)
             
             sb_rep = self.scalar_bar_widget.GetRepresentation()
-            pos_x, pos_y, width, height = self._clamp_legend_bounds(settings)
-            sb_rep.SetPosition(pos_x, pos_y)
-            sb_rep.SetPosition2(width, height)
+            sb_rep.SetPosition(settings["position_x"], settings["position_y"])
+            sb_rep.SetPosition2(settings["width"], settings["height"])
             
             self._current_scalar_bar_actor = actor
             self.scalar_bar_widget.On()
