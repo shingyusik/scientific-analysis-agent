@@ -230,6 +230,7 @@ class MainWindow(QMainWindow):
         self._pipeline_browser.item_delete_requested.connect(self._on_delete_requested)
         
         self._properties_panel.apply_filter_requested.connect(self._pipeline_vm.commit_filter)
+        self._properties_panel.delete_requested.connect(self._on_delete_requested)
         self._properties_panel.opacity_changed.connect(self._on_opacity_changed)
         self._properties_panel.point_size_changed.connect(self._pipeline_vm.set_point_size)
         self._properties_panel.line_width_changed.connect(self._pipeline_vm.set_line_width)
