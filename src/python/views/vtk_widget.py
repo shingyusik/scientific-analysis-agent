@@ -201,54 +201,59 @@ class VTKWidget(QWidget):
         self._preview_plane_source.SetOrigin(-0.5, -0.5, 0)
         self._preview_plane_source.SetPoint1(0.5, -0.5, 0)
         self._preview_plane_source.SetPoint2(-0.5, 0.5, 0)
-        self._preview_plane_source.SetNormal(normal)
-        self._preview_plane_source.SetCenter(0, 0, 0)
-        
-        self._preview_plane_actor.SetPosition(origin)
+        self._preview_plane_source.Update()
         
         if bounds:
             size_x = bounds[1] - bounds[0]
             size_y = bounds[3] - bounds[2]
             size_z = bounds[5] - bounds[4]
             scale = max(size_x, size_y, size_z) * 1.5
-            self._preview_plane_actor.SetScale(scale, scale, scale)
             
             normal_np = np.array(normal, dtype=np.float64)
             normal_len = np.linalg.norm(normal_np)
             if normal_len > 0:
                 normal_np = normal_np / normal_len
             
-            arbitrary = np.array([0, 0, 1], dtype=np.float64)
-            if abs(np.dot(normal_np, arbitrary)) > 0.9:
-                arbitrary = np.array([0, 1, 0], dtype=np.float64)
+            z_axis = np.array([0, 0, 1], dtype=np.float64)
+            rotation_axis = np.cross(z_axis, normal_np)
+            dot_product = np.dot(z_axis, normal_np)
             
-            u = np.cross(normal_np, arbitrary)
-            u = u / np.linalg.norm(u)
-            v = np.cross(normal_np, u)
-            v = v / np.linalg.norm(v)
-            
-            corner_offset = (u + v) * scale * 0.4
-            arrow_origin = np.array(origin) + corner_offset
-            
-            arrow_length = max(size_x, size_y, size_z) * 0.3
-            
-            transform = vtk.vtkTransform()
-            transform.Translate(arrow_origin[0], arrow_origin[1], arrow_origin[2])
-            
-            x_axis = np.array([1, 0, 0], dtype=np.float64)
-            rotation_axis = np.cross(x_axis, normal_np)
-            dot_product = np.dot(x_axis, normal_np)
+            plane_transform = vtk.vtkTransform()
+            plane_transform.Translate(origin)
             
             if np.linalg.norm(rotation_axis) > 1e-6:
                 rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
                 rotation_angle = np.arccos(np.clip(dot_product, -1.0, 1.0))
-                transform.RotateWXYZ(np.degrees(rotation_angle), rotation_axis[0], rotation_axis[1], rotation_axis[2])
+                plane_transform.RotateWXYZ(np.degrees(rotation_angle), rotation_axis[0], rotation_axis[1], rotation_axis[2])
             elif dot_product < 0:
-                transform.RotateZ(180)
+                plane_transform.RotateX(180)
             
-            transform.Scale(arrow_length, arrow_length, arrow_length)
+            plane_transform.Scale(scale, scale, scale)
+            self._preview_plane_actor.SetUserTransform(plane_transform)
             
-            self._preview_arrow_actor.SetUserTransform(transform)
+            local_corner = [0.5, 0.5, 0, 1]
+            world_corner = plane_transform.TransformPoint(local_corner[:3])
+            arrow_origin = np.array(world_corner)
+            
+            arrow_length = max(size_x, size_y, size_z) * 0.3
+            
+            arrow_transform = vtk.vtkTransform()
+            arrow_transform.Translate(arrow_origin[0], arrow_origin[1], arrow_origin[2])
+            
+            x_axis = np.array([1, 0, 0], dtype=np.float64)
+            arrow_rotation_axis = np.cross(x_axis, normal_np)
+            arrow_dot_product = np.dot(x_axis, normal_np)
+            
+            if np.linalg.norm(arrow_rotation_axis) > 1e-6:
+                arrow_rotation_axis = arrow_rotation_axis / np.linalg.norm(arrow_rotation_axis)
+                arrow_rotation_angle = np.arccos(np.clip(arrow_dot_product, -1.0, 1.0))
+                arrow_transform.RotateWXYZ(np.degrees(arrow_rotation_angle), arrow_rotation_axis[0], arrow_rotation_axis[1], arrow_rotation_axis[2])
+            elif arrow_dot_product < 0:
+                arrow_transform.RotateZ(180)
+            
+            arrow_transform.Scale(arrow_length, arrow_length, arrow_length)
+            
+            self._preview_arrow_actor.SetUserTransform(arrow_transform)
             self._preview_arrow_actor.VisibilityOn()
         else:
             self._preview_arrow_actor.VisibilityOff()
