@@ -35,6 +35,32 @@ class PropertiesPanel(QWidget):
         self._filter_widget: Optional[QWidget] = None
         self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
         
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        
+        self._apply_btn = QPushButton("Apply")
+        self._apply_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2c3e50;
+                color: white;
+                font-weight: bold;
+                padding: 10px;
+                border-radius: 4px;
+                margin: 4px;
+            }
+            QPushButton:hover:enabled { background-color: #34495e; }
+            QPushButton:pressed:enabled { background-color: #1a252f; }
+            QPushButton:disabled {
+                background-color: #555;
+                color: #999;
+            }
+        """)
+        self._apply_btn.setCursor(Qt.PointingHandCursor)
+        self._apply_btn.clicked.connect(self._on_apply_clicked)
+        self._apply_btn.setEnabled(False)
+        main_layout.addWidget(self._apply_btn)
+        
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         
@@ -43,9 +69,6 @@ class PropertiesPanel(QWidget):
         self._layout.setAlignment(Qt.AlignTop)
         
         self._scroll.setWidget(self._content)
-        
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(self._scroll)
     
     def set_render_service(self, render_service: "VTKRenderService") -> None:
@@ -78,17 +101,18 @@ class PropertiesPanel(QWidget):
         self._filter_widget = None
         
         if not self._current_item:
+            self._apply_btn.setEnabled(False)
             self._layout.addWidget(QLabel("No item selected."))
             return
         
         item = self._current_item
         
         if not item.actor:
+            self._apply_btn.setEnabled(False)
             self._layout.addWidget(QLabel("No styling properties available for this source."))
             return
         
-        if "filter" in item.item_type:
-            self._add_apply_button()
+        self._apply_btn.setEnabled("filter" in item.item_type)
         
         if self._data_arrays:
             self._add_color_by_section(current_array, current_component, scalar_visible)
@@ -213,24 +237,6 @@ class PropertiesPanel(QWidget):
         layout.addWidget(main_combo)
         layout.addWidget(component_combo)
         self._layout.addWidget(group)
-    
-    def _add_apply_button(self) -> None:
-        """Add apply button for filters."""
-        btn = QPushButton("Apply")
-        btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2c3e50;
-                color: white;
-                font-weight: bold;
-                padding: 10px;
-                border-radius: 4px;
-            }
-            QPushButton:hover { background-color: #34495e; }
-            QPushButton:pressed { background-color: #1a252f; }
-        """)
-        btn.setCursor(Qt.PointingHandCursor)
-        btn.clicked.connect(self._on_apply_clicked)
-        self._layout.addWidget(btn)
     
     def _on_apply_clicked(self) -> None:
         """Handle apply button click."""

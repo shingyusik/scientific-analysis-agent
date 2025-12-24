@@ -334,6 +334,7 @@ class MainWindow(QMainWindow):
     def _on_selection_changed(self, item) -> None:
         """Handle selection change."""
         if item:
+            self._pipeline_browser.select_item(item.id)
             self._update_properties_panel(item)
             self._info_page.setPlainText(item.get_info_string())
             self._update_time_animation_widget(item)
