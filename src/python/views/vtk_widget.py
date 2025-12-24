@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PySide6.QtCore import Signal
 import vtk
+import numpy as np
 from typing import Any, Tuple, List
 
 try:
@@ -84,6 +85,22 @@ class VTKWidget(QWidget):
         self._preview_plane_actor.GetProperty().SetOpacity(0.4)
         self._preview_plane_actor.VisibilityOff()
         self.renderer.AddActor(self._preview_plane_actor)
+        
+        self._preview_arrow_source = vtk.vtkArrowSource()
+        self._preview_arrow_source.SetTipResolution(20)
+        self._preview_arrow_source.SetShaftResolution(20)
+        self._preview_arrow_source.SetTipLength(0.3)
+        self._preview_arrow_source.SetShaftRadius(0.05)
+        self._preview_arrow_source.SetTipRadius(0.15)
+        
+        self._preview_arrow_mapper = vtk.vtkPolyDataMapper()
+        self._preview_arrow_mapper.SetInputConnection(self._preview_arrow_source.GetOutputPort())
+        
+        self._preview_arrow_actor = vtk.vtkActor()
+        self._preview_arrow_actor.SetMapper(self._preview_arrow_mapper)
+        self._preview_arrow_actor.GetProperty().SetColor(1.0, 0.0, 0.0)
+        self._preview_arrow_actor.VisibilityOff()
+        self.renderer.AddActor(self._preview_arrow_actor)
     
     def add_actor(self, actor: Any) -> None:
         """Add actor to renderer."""
@@ -108,6 +125,8 @@ class VTKWidget(QWidget):
             self.renderer.RemoveAllViewProps()
             if hasattr(self, '_preview_plane_actor'):
                 self.renderer.AddActor(self._preview_plane_actor)
+            if hasattr(self, '_preview_arrow_actor'):
+                self.renderer.AddActor(self._preview_arrow_actor)
             self.render()
     
     def set_background(self, color1: Tuple[float, float, float], 
@@ -193,6 +212,46 @@ class VTKWidget(QWidget):
             size_z = bounds[5] - bounds[4]
             scale = max(size_x, size_y, size_z) * 1.5
             self._preview_plane_actor.SetScale(scale, scale, scale)
+            
+            normal_np = np.array(normal, dtype=np.float64)
+            normal_len = np.linalg.norm(normal_np)
+            if normal_len > 0:
+                normal_np = normal_np / normal_len
+            
+            arbitrary = np.array([0, 0, 1], dtype=np.float64)
+            if abs(np.dot(normal_np, arbitrary)) > 0.9:
+                arbitrary = np.array([0, 1, 0], dtype=np.float64)
+            
+            u = np.cross(normal_np, arbitrary)
+            u = u / np.linalg.norm(u)
+            v = np.cross(normal_np, u)
+            v = v / np.linalg.norm(v)
+            
+            corner_offset = (u + v) * scale * 0.4
+            arrow_origin = np.array(origin) + corner_offset
+            
+            arrow_length = max(size_x, size_y, size_z) * 0.3
+            
+            transform = vtk.vtkTransform()
+            transform.Translate(arrow_origin[0], arrow_origin[1], arrow_origin[2])
+            
+            x_axis = np.array([1, 0, 0], dtype=np.float64)
+            rotation_axis = np.cross(x_axis, normal_np)
+            dot_product = np.dot(x_axis, normal_np)
+            
+            if np.linalg.norm(rotation_axis) > 1e-6:
+                rotation_axis = rotation_axis / np.linalg.norm(rotation_axis)
+                rotation_angle = np.arccos(np.clip(dot_product, -1.0, 1.0))
+                transform.RotateWXYZ(np.degrees(rotation_angle), rotation_axis[0], rotation_axis[1], rotation_axis[2])
+            elif dot_product < 0:
+                transform.RotateZ(180)
+            
+            transform.Scale(arrow_length, arrow_length, arrow_length)
+            
+            self._preview_arrow_actor.SetUserTransform(transform)
+            self._preview_arrow_actor.VisibilityOn()
+        else:
+            self._preview_arrow_actor.VisibilityOff()
         
         self._preview_plane_actor.VisibilityOn()
         self._preview_plane_actor.Modified()
@@ -202,7 +261,9 @@ class VTKWidget(QWidget):
         """Hide plane preview."""
         if hasattr(self, '_preview_plane_actor'):
             self._preview_plane_actor.VisibilityOff()
-            self.render()
+        if hasattr(self, '_preview_arrow_actor'):
+            self._preview_arrow_actor.VisibilityOff()
+        self.render()
     
     def update_scalar_bar(self, actor: Any, title: str = None) -> None:
         """Update scalar bar for actor."""
