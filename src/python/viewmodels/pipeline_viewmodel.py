@@ -61,14 +61,17 @@ class PipelineViewModel(QObject):
         self.selection_changed.emit(self.selected_item)
     
     def add_source(self, name: str, vtk_data, actor, item_type: str = "source", 
-                   parent_id: str = None) -> PipelineItem:
+                   parent_id: str = None, color_by: "ColorByInfo" = None) -> PipelineItem:
         """Add a new source to the pipeline."""
+        from models.pipeline_item import ColorByInfo
+        
         item = PipelineItem(
             name=name,
             item_type=item_type,
             vtk_data=vtk_data,
             actor=actor,
             parent_id=parent_id,
+            color_by=color_by if color_by else ColorByInfo(),
         )
         self._items[item.id] = item
         self.item_added.emit(item)
@@ -76,9 +79,12 @@ class PipelineViewModel(QObject):
     
     def create_cone_source(self) -> PipelineItem:
         """Create default cone source."""
+        from models.pipeline_item import ColorByInfo
+        
         actor, data = self._render_service.create_cone_source()
-        item = self.add_source("Cone Source", data, actor, "source")
-        self._render_service.set_color_by(actor, "Elevation")
+        color_by = ColorByInfo(array_name="Elevation", array_type="POINT", component="")
+        self._render_service.set_color_by(actor, "Elevation", "POINT", "")
+        item = self.add_source("Cone Source", data, actor, "source", color_by=color_by)
         return item
     
     def load_file(self, file_path: str, check_time_series: bool = True) -> Optional[PipelineItem]:
@@ -275,11 +281,14 @@ class PipelineViewModel(QObject):
             self.item_updated.emit(item)
             self.message.emit(f"Set '{item.name}' representation to {style}.")
     
-    def set_color_by(self, item_id: str, array_name: str, array_type: str = 'POINT', component: str = 'Magnitude') -> None:
+    def set_color_by(self, item_id: str, array_name: str, array_type: str = 'POINT', component: str = '') -> None:
         """Set coloring by scalar array."""
+        from models.pipeline_item import ColorByInfo
+        
         item = self._items.get(item_id)
         if item and item.actor:
             self._render_service.set_color_by(item.actor, array_name, array_type, component)
+            item.color_by = ColorByInfo(array_name=array_name, array_type=array_type, component=component)
             self.item_updated.emit(item)
     
     def set_opacity(self, item_id: str, opacity: float) -> None:

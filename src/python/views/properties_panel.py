@@ -54,14 +54,15 @@ class PropertiesPanel(QWidget):
     
     def set_item(self, item: Optional[PipelineItem], style: str = "Surface",
                  data_arrays: List[Tuple[str, str]] = None, 
-                 current_array: str = None, scalar_visible: bool = False,
+                 current_array: str = None, current_component: str = None,
+                 scalar_visible: bool = False,
                  parent_bounds: Tuple[float, ...] = None) -> None:
         """Set the current item to display properties for."""
         self._current_item = item
         self._current_style = style
         self._data_arrays = data_arrays or []
         self._parent_bounds = parent_bounds
-        self._rebuild_ui(current_array, scalar_visible)
+        self._rebuild_ui(current_array, current_component, scalar_visible)
     
     def _clear_layout(self) -> None:
         """Clear all widgets from the layout."""
@@ -70,7 +71,8 @@ class PropertiesPanel(QWidget):
             if child.widget():
                 child.widget().deleteLater()
     
-    def _rebuild_ui(self, current_array: str = None, scalar_visible: bool = False) -> None:
+    def _rebuild_ui(self, current_array: str = None, current_component: str = None, 
+                    scalar_visible: bool = False) -> None:
         """Rebuild the properties UI for current item."""
         self._clear_layout()
         self._filter_widget = None
@@ -89,7 +91,7 @@ class PropertiesPanel(QWidget):
             self._add_apply_button()
         
         if self._data_arrays:
-            self._add_color_by_section(current_array, scalar_visible)
+            self._add_color_by_section(current_array, current_component, scalar_visible)
         
         self._add_styling_section()
         
@@ -123,7 +125,8 @@ class PropertiesPanel(QWidget):
             self._filter_widget = widget
             self._layout.addWidget(widget)
     
-    def _add_color_by_section(self, current_array: str, scalar_visible: bool) -> None:
+    def _add_color_by_section(self, current_array: str, current_component: str, 
+                              scalar_visible: bool) -> None:
         """Add color by dropdown with vector component selection."""
         group = QGroupBox("Color By")
         layout = QHBoxLayout(group)
@@ -136,32 +139,16 @@ class PropertiesPanel(QWidget):
         component_combo.setEnabled(False)
         
         current_main_idx = 0
-        current_component = None
-        
-        VALID_COMPONENTS = {"Magnitude", "X", "Y", "Z"}
-        
-        if scalar_visible and current_array:
-            for idx, (name, type_, num_components) in enumerate(self._data_arrays):
-                if num_components > 1:
-                    if name == current_array:
-                        current_main_idx = idx + 1
-                        current_component = "Magnitude"
-                        break
-                    prefix = f"{name}_"
-                    if current_array.startswith(prefix):
-                        suffix = current_array[len(prefix):]
-                        if suffix in VALID_COMPONENTS:
-                            current_main_idx = idx + 1
-                            current_component = suffix
-                            break
+        saved_component = current_component if current_component else "Magnitude"
         
         for idx, (name, type_, num_components) in enumerate(self._data_arrays):
             if num_components > 1:
                 main_combo.addItem(f"{name} ({type_})", (name, type_, num_components))
             else:
                 main_combo.addItem(f"{name} ({type_})", (name, type_, None))
-                if scalar_visible and name == current_array:
-                    current_main_idx = idx + 1
+            
+            if scalar_visible and name == current_array:
+                current_main_idx = idx + 1
         
         main_combo.setCurrentIndex(current_main_idx)
         
@@ -182,7 +169,7 @@ class PropertiesPanel(QWidget):
                 component_combo.setEnabled(True)
                 
                 component_idx = 0
-                target_component = component_to_select if component_to_select else current_component
+                target_component = component_to_select if component_to_select else saved_component
                 if target_component:
                     for i in range(component_combo.count()):
                         if component_combo.itemData(i) == target_component:
@@ -199,7 +186,7 @@ class PropertiesPanel(QWidget):
             idx = main_combo.currentIndex()
             data = main_combo.itemData(idx)
             if data and data[2] and data[2] > 1:
-                update_component_combo(idx, current_component)
+                update_component_combo(idx, saved_component)
             else:
                 update_component_combo(idx)
             on_selection_changed()
@@ -221,7 +208,7 @@ class PropertiesPanel(QWidget):
         main_combo.currentIndexChanged.connect(on_main_combo_changed)
         component_combo.currentIndexChanged.connect(on_selection_changed)
         
-        update_component_combo(current_main_idx, current_component)
+        update_component_combo(current_main_idx, saved_component)
         
         layout.addWidget(main_combo)
         layout.addWidget(component_combo)

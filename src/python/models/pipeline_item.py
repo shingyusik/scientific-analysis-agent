@@ -1,6 +1,18 @@
 from dataclasses import dataclass, field
-from typing import Any, List
+from typing import Any, List, Optional, Tuple
 import uuid
+
+
+@dataclass
+class ColorByInfo:
+    """Information about current color by setting."""
+    array_name: str = "__SolidColor__"
+    array_type: str = "POINT"
+    component: str = ""
+    
+    @property
+    def is_solid_color(self) -> bool:
+        return self.array_name == "__SolidColor__"
 
 
 @dataclass
@@ -15,6 +27,7 @@ class PipelineItem:
     visible: bool = True
     parent_id: str | None = None
     filter_params: dict = field(default_factory=dict)
+    color_by: ColorByInfo = field(default_factory=ColorByInfo)
     
     is_time_series: bool = False
     time_steps: List[Any] = field(default_factory=list)

@@ -411,8 +411,8 @@ class MainWindow(QMainWindow):
                 parent_bounds = parent.vtk_data.GetBounds()
         
         self._properties_panel.set_item(
-            item, ctx.style, ctx.data_arrays, ctx.current_array, ctx.scalar_visible,
-            parent_bounds
+            item, ctx.style, ctx.data_arrays, ctx.current_array, ctx.current_component,
+            ctx.scalar_visible, parent_bounds
         )
         
         self._update_scalar_bar_visibility(item, ctx.scalar_visible)
