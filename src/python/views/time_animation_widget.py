@@ -40,7 +40,7 @@ class TimeAnimationWidget(QWidget):
         self._btn_first.setToolTip("Go to first step")
         layout.addWidget(self._btn_first)
         
-        self._btn_step_back = QPushButton("◀")
+        self._btn_step_back = QPushButton("◀|")
         self._btn_step_back.setStyleSheet(btn_style)
         self._btn_step_back.setToolTip("Previous step")
         layout.addWidget(self._btn_step_back)
@@ -57,7 +57,7 @@ class TimeAnimationWidget(QWidget):
         self._btn_play_forward.setCheckable(True)
         layout.addWidget(self._btn_play_forward)
         
-        self._btn_step_forward = QPushButton("▶")
+        self._btn_step_forward = QPushButton("|▶")
         self._btn_step_forward.setStyleSheet(btn_style)
         self._btn_step_forward.setToolTip("Next step")
         layout.addWidget(self._btn_step_forward)
