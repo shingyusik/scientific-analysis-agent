@@ -111,7 +111,7 @@ class PipelineViewModel(QObject):
         try:
             self.message.emit(f"Loading time series ({len(file_paths)} files)...")
             
-            data_list, series_name = self._file_loader.load_time_series(file_paths)
+            data_list, series_name, sorted_paths = self._file_loader.load_time_series(file_paths)
             
             first_data = data_list[0]
             actor = self._render_service.create_actor_for_file(first_data)
@@ -129,14 +129,14 @@ class PipelineViewModel(QObject):
                 actor=actor,
                 is_time_series=True,
                 time_steps=data_list,
-                time_file_paths=file_paths,
+                time_file_paths=sorted_paths,
                 current_time_index=0,
             )
             self._items[item.id] = item
             self.item_added.emit(item)
             self.time_series_loaded.emit(item)
             
-            self.message.emit(f"Loaded time series: {series_name} ({len(file_paths)} steps)")
+            self.message.emit(f"Loaded time series: {series_name} ({len(sorted_paths)} steps)")
             return item
         except Exception as e:
             self.message.emit(f"Error loading time series: {e}")

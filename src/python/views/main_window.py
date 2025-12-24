@@ -280,7 +280,6 @@ class MainWindow(QMainWindow):
             return
         
         if len(file_names) > 1:
-            file_names.sort()
             item = self._pipeline_vm.load_time_series(file_names)
         else:
             item = self._pipeline_vm.load_file(file_names[0])

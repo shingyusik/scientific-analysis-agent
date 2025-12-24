@@ -105,6 +105,12 @@ class FileLoaderService:
         series_files.sort(key=extract_number)
         return series_files
     
+    def _natural_sort_key(self, path: str):
+        """Generate sort key for natural sorting (numeric-aware)."""
+        filename = os.path.basename(path)
+        return [int(c) if c.isdigit() else c.lower() 
+                for c in re.split(r'(\d+)', filename)]
+    
     def load_time_series(self, file_paths: List[str]) -> Tuple[List[Any], str]:
         """
         Load all files in a time series.
@@ -118,13 +124,15 @@ class FileLoaderService:
         if not file_paths:
             raise ValueError("No files provided for time series")
         
+        sorted_paths = sorted(file_paths, key=self._natural_sort_key)
+        
         data_list = []
-        for path in file_paths:
+        for path in sorted_paths:
             data, _ = self.load(path)
             data_list.append(data)
         
-        first_name = os.path.basename(file_paths[0])
-        last_name = os.path.basename(file_paths[-1])
+        first_name = os.path.basename(sorted_paths[0])
+        last_name = os.path.basename(sorted_paths[-1])
         name, ext = os.path.splitext(first_name)
         
         match = re.search(r'(\d+)$', name)
@@ -137,5 +145,5 @@ class FileLoaderService:
         else:
             series_name = f"{first_name} (series)"
         
-        return data_list, series_name
+        return data_list, series_name, sorted_paths
 
