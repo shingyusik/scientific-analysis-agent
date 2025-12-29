@@ -141,6 +141,7 @@ class ChatPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._streaming_bubble = None
+        self._streaming_content = ""
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -194,6 +195,7 @@ class ChatPanel(QWidget):
     
     def start_streaming(self) -> None:
         """Start a streaming message bubble."""
+        self._streaming_content = ""
         self._streaming_bubble = MessageBubble("Agent", "▌")
         self._messages_layout.insertWidget(self._messages_layout.count() - 1, self._streaming_bubble)
         self._scroll_to_bottom()
@@ -201,17 +203,16 @@ class ChatPanel(QWidget):
     def update_streaming(self, content: str) -> None:
         """Update the streaming message content."""
         if self._streaming_bubble:
+            self._streaming_content = content
             self._streaming_bubble.update_content(content + "▌")
             self._scroll_to_bottom()
     
     def finish_streaming(self) -> None:
         """Finish streaming and finalize the message."""
-        if self._streaming_bubble:
-            current_text = self._streaming_bubble._content_label.toPlainText() if self._streaming_bubble._content_label else ""
-            if current_text.endswith("▌"):
-                current_text = current_text[:-1]
-            self._streaming_bubble.update_content(current_text)
+        if self._streaming_bubble and self._streaming_content:
+            self._streaming_bubble.update_content(self._streaming_content)
         self._streaming_bubble = None
+        self._streaming_content = ""
     
     def _scroll_to_bottom(self) -> None:
         """Scroll to the bottom of the chat."""
