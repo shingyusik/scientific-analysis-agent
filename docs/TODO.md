@@ -1,5 +1,4 @@
 
-- [ ] ai가 조작시 모두 비활성화
 - [ ] 메모리 연결
 - [ ] test code 작성
 - [ ] logging
@@ -10,3 +9,7 @@
 - [ ] sequential thinking
 - [ ] 사용자 요청 입력 및 선택 창 띄우기
 - [ ] 카메라 뷰 조정 툴
+- [ ] 백그라운드 색 툴
+- [ ] representation 툴
+- [ ] time 스텝 옮기기 툴 (재생, 앞/뒤로가기, 맨 앞/뒤로가기, 특정 step으로 가기)
+- [ ] coloring range 조정 툴

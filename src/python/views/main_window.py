@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
-                               QMenu, QToolButton, QFileDialog, QMessageBox,
+                               QMenu, QToolButton, QFileDialog, QMessageBox, QToolBar,
                                QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
@@ -249,6 +249,9 @@ class MainWindow(QMainWindow):
         self._chat_vm.tool_activity.connect(self._chat_panel.add_tool_activity)
         self._chat_vm.render_requested.connect(self._vtk_widget.render)
         self._chat_vm.conversation_cleared.connect(self._chat_panel.clear_display)
+        
+        self._chat_vm.streaming_started.connect(self._on_ai_started)
+        self._chat_vm.streaming_finished.connect(self._on_ai_finished)
         
         self._vtk_vm.render_requested.connect(self._vtk_widget.render)
         self._vtk_vm.actor_added.connect(self._vtk_widget.add_actor)
@@ -522,3 +525,24 @@ class MainWindow(QMainWindow):
         else:
             self._time_manager.set_item(None)
             self._time_animation_widget.update_for_item(False, 0, 0)
+    
+    def _on_ai_started(self) -> None:
+        """Handle AI starting to process/reflect."""
+        self._set_ui_enabled(False)
+    
+    def _on_ai_finished(self) -> None:
+        """Handle AI finishing processing."""
+        self._set_ui_enabled(True)
+    
+    def _set_ui_enabled(self, enabled: bool) -> None:
+        """Enable or disable overall UI components."""
+        self.menuBar().setEnabled(enabled)
+        
+        # Disable all toolbars
+        for toolbar in self.findChildren(QToolBar):
+            toolbar.setEnabled(enabled)
+            
+        self._pipeline_browser.setEnabled(enabled)
+        self._details_tabs.setEnabled(enabled)
+        self._chat_panel.set_input_enabled(enabled)
+        self._vtk_widget.set_interaction_enabled(enabled)

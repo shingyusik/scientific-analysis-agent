@@ -64,6 +64,23 @@ class VTKWidget(QWidget):
         self.vtk_widget.Start()
         self.initialized.emit()
     
+    def set_interaction_enabled(self, enabled: bool) -> None:
+        """Enable or disable VTK interactor and associated widgets."""
+        if not self.vtk_widget:
+            return
+            
+        interactor = self.vtk_widget.GetRenderWindow().GetInteractor()
+        if enabled:
+            interactor.Enable()
+            self.axes_widget.SetEnabled(1)
+            # Re-enable scalar bar if it was supposed to be on
+            if hasattr(self, '_current_scalar_bar_actor') and self._current_scalar_bar_actor:
+                self.scalar_bar_widget.On()
+        else:
+            interactor.Disable()
+            self.axes_widget.SetEnabled(0)
+            self.scalar_bar_widget.Off()
+    
     def _setup_axes(self) -> None:
         """Setup orientation axes widget."""
         self.axes_actor = vtk.vtkAxesActor()

@@ -321,6 +321,16 @@ class ChatPanel(QWidget):
         
         layout.addWidget(input_container)
     
+    def set_input_enabled(self, enabled: bool) -> None:
+        """Enable or disable chat input and buttons."""
+        self._input.setEnabled(enabled)
+        self._send_btn.setEnabled(enabled)
+        self._new_chat_btn.setEnabled(enabled)
+        if enabled:
+            self._input.setPlaceholderText("메시지를 입력하세요...")
+        else:
+            self._input.setPlaceholderText("AI가 응답 중입니다...")
+    
     def _on_send(self) -> None:
         """Handle send button/enter key."""
         text = self._input.text().strip()
