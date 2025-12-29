@@ -243,6 +243,7 @@ class MainWindow(QMainWindow):
         self._chat_vm.message_added.connect(
             lambda msg: self._chat_panel.append_message(msg.sender, msg.content)
         )
+        self._chat_vm.render_requested.connect(self._vtk_widget.render)
         
         self._vtk_vm.render_requested.connect(self._vtk_widget.render)
         self._vtk_vm.actor_added.connect(self._vtk_widget.add_actor)
@@ -316,6 +317,9 @@ class MainWindow(QMainWindow):
     def _on_item_added(self, item) -> None:
         """Handle item added to pipeline."""
         self._pipeline_browser.add_item(item)
+        if item.actor:
+            self._vtk_vm.add_actor(item.actor)
+            self._vtk_vm.request_render()
     
     def _on_item_removed(self, item_id: str) -> None:
         """Handle item removed from pipeline."""

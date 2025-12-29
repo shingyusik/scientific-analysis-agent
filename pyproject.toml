@@ -11,8 +11,9 @@ dependencies = [
     "PySide6",
     "vtk",
     "langgraph",
-    "langchain",
+    "langchain[openai]",
     "pybind11",
+    "python-dotenv",
 ]
 
 [build-system]
