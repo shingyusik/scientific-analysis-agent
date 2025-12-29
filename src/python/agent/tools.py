@@ -47,10 +47,30 @@ def get_pipeline_info() -> str:
 
 
 @tool
+def select_pipeline_item(item_id: str) -> str:
+    """Select an item in the pipeline. This makes it the active item for subsequent filter applications.
+    
+    Args:
+        item_id: ID of the item to select
+    """
+    vm = get_pipeline_viewmodel()
+    if not vm:
+        return "Error: Pipeline not initialized"
+    
+    item = vm.items.get(item_id)
+    if not item:
+        return f"Error: Item {item_id} not found"
+    
+    vm.select_item(item_id)
+    return f"Selected item: '{item.name}' (id: {item_id})"
+
+
+@tool
 def apply_slice_filter(
     normal_x: float = 1.0,
     normal_y: float = 0.0,
     normal_z: float = 0.0,
+    show_plane: bool = True,
     item_id: Optional[str] = None
 ) -> str:
     """Apply a slice filter to cut data along a plane.
@@ -59,6 +79,7 @@ def apply_slice_filter(
         normal_x: X component of the slice plane normal vector (default: 1.0 for YZ plane)
         normal_y: Y component of the slice plane normal vector (default: 0.0)
         normal_z: Z component of the slice plane normal vector (default: 0.0)
+        show_plane: Whether to show the interactive slice plane widget (default: True)
         item_id: ID of the item to apply filter to. If not provided, uses selected item.
     """
     vm = get_pipeline_viewmodel()
@@ -79,7 +100,7 @@ def apply_slice_filter(
         "origin": list(center),
         "normal": [normal_x, normal_y, normal_z],
         "offsets": [0.0],
-        "show_preview": False
+        "show_preview": show_plane
     }
     
     result = vm.apply_filter("slice_filter", target_id, params)
@@ -95,6 +116,7 @@ def apply_clip_filter(
     normal_y: float = 0.0,
     normal_z: float = 0.0,
     inside_out: bool = False,
+    show_plane: bool = True,
     item_id: Optional[str] = None
 ) -> str:
     """Apply a clip filter to remove part of the data on one side of a plane.
@@ -104,6 +126,7 @@ def apply_clip_filter(
         normal_y: Y component of the clip plane normal vector (default: 0.0)
         normal_z: Z component of the clip plane normal vector (default: 0.0)
         inside_out: If True, keeps the opposite side of the plane (default: False)
+        show_plane: Whether to show the interactive clip plane widget (default: True)
         item_id: ID of the item to apply filter to. If not provided, uses selected item.
     """
     vm = get_pipeline_viewmodel()
@@ -123,7 +146,8 @@ def apply_clip_filter(
     params = {
         "origin": list(center),
         "normal": [normal_x, normal_y, normal_z],
-        "inside_out": inside_out
+        "inside_out": inside_out,
+        "show_preview": show_plane
     }
     
     result = vm.apply_filter("clip_filter", target_id, params)
@@ -266,6 +290,7 @@ def update_slice_filter_params(
     normal_y: Optional[float] = None,
     normal_z: Optional[float] = None,
     offsets: Optional[str] = None,
+    show_plane: Optional[bool] = None,
     apply: bool = True
 ) -> str:
     """Update parameters of an existing slice filter.
@@ -279,6 +304,7 @@ def update_slice_filter_params(
         normal_y: Y component of slice plane normal vector.
         normal_z: Z component of slice plane normal vector.
         offsets: Comma-separated offset values (e.g., "0.0" or "-1.0,0.0,1.0" for multiple slices).
+        show_plane: Whether to show the interactive slice plane widget.
         apply: If True, immediately recalculate the filter with new parameters (default: True).
     """
     vm = get_pipeline_viewmodel()
@@ -331,6 +357,10 @@ def update_slice_filter_params(
         except ValueError:
             return f"Error: Invalid offsets format. Use comma-separated numbers (e.g., '0.0' or '-1.0,0.0,1.0')"
     
+    if show_plane is not None:
+        params["show_preview"] = show_plane
+        updated.append(f"show_plane={show_plane}")
+    
     if not updated:
         return "No parameters were changed. Specify at least one parameter to update."
     
@@ -352,6 +382,7 @@ def update_clip_filter_params(
     normal_x: Optional[float] = None,
     normal_y: Optional[float] = None,
     normal_z: Optional[float] = None,
+    show_plane: Optional[bool] = None,
     apply: bool = True
 ) -> str:
     """Update parameters of an existing clip filter.
@@ -364,6 +395,7 @@ def update_clip_filter_params(
         normal_x: X component of clip plane normal vector.
         normal_y: Y component of clip plane normal vector.
         normal_z: Z component of clip plane normal vector.
+        show_plane: Whether to show the interactive clip plane widget.
         apply: If True, immediately recalculate the filter with new parameters (default: True).
     """
     vm = get_pipeline_viewmodel()
@@ -408,6 +440,10 @@ def update_clip_filter_params(
         updated.append(f"normal_z={normal_z}")
     params["normal"] = current_normal
     
+    if show_plane is not None:
+        params["show_preview"] = show_plane
+        updated.append(f"show_plane={show_plane}")
+    
     if not updated:
         return "No parameters were changed. Specify at least one parameter to update."
     
@@ -423,6 +459,7 @@ def update_clip_filter_params(
 def get_all_tools() -> list:
     return [
         get_pipeline_info,
+        select_pipeline_item,
         apply_slice_filter,
         apply_clip_filter,
         set_visibility,
