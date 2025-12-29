@@ -32,7 +32,7 @@ class StreamingAgentWorker(QThread):
     """Worker thread for streaming agent execution."""
     
     token_received = Signal(str)
-    finished = Signal()
+    finished = Signal(bool)
     error = Signal(str)
     
     def __init__(self, agent, messages: List[BaseMessage], parent=None):
@@ -42,10 +42,15 @@ class StreamingAgentWorker(QThread):
     
     def run(self):
         try:
-            for event in self._agent.stream(
+            is_blocked = False
+            for mode, event in self._agent.stream(
                 {"messages": self._messages, "pipeline_context": {}, "blocked": False},
-                stream_mode="messages"
+                stream_mode=["messages", "values"]
             ):
+                if mode == "values":
+                    is_blocked = event.get("blocked", False)
+                    continue
+                
                 message, metadata = event
                 node_name = metadata.get("langgraph_node", "")
                 
@@ -58,7 +63,7 @@ class StreamingAgentWorker(QThread):
                     if message.content:
                         self.token_received.emit(message.content)
             
-            self.finished.emit()
+            self.finished.emit(is_blocked)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -160,10 +165,14 @@ class ChatViewModel(QObject):
         self._current_response += token
         self.streaming_token.emit(self._current_response)
     
-    def _on_streaming_finished(self) -> None:
+    def _on_streaming_finished(self, is_blocked: bool) -> None:
         if self._current_response:
-            msg = ChatMessage("Agent", self._current_response)
-            self._messages.append(msg)
+            if is_blocked:
+                if self._messages and self._messages[-1].sender == "User":
+                    self._messages.pop()
+            else:
+                msg = ChatMessage("Agent", self._current_response)
+                self._messages.append(msg)
             self.agent_response.emit(self._current_response)
         
         self.streaming_finished.emit()
