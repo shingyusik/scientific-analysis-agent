@@ -43,11 +43,18 @@ class StreamingAgentWorker(QThread):
     def run(self):
         try:
             for event in self._agent.stream(
-                {"messages": self._messages, "pipeline_context": {}},
+                {"messages": self._messages, "pipeline_context": {}, "blocked": False},
                 stream_mode="messages"
             ):
                 message, metadata = event
+                node_name = metadata.get("langgraph_node", "")
+                
                 if isinstance(message, AIMessageChunk):
+                    if node_name == "guardrail":
+                        continue
+                    if message.content:
+                        self.token_received.emit(message.content)
+                elif isinstance(message, AIMessage):
                     if message.content:
                         self.token_received.emit(message.content)
             
