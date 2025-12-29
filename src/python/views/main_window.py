@@ -239,6 +239,7 @@ class MainWindow(QMainWindow):
         self._properties_panel.legend_settings_changed.connect(self._vtk_vm.set_legend_settings)
         
         self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
+        self._chat_panel.new_conversation_requested.connect(self._chat_vm.start_new_conversation)
         self._chat_vm.message_added.connect(
             lambda msg: self._chat_panel.append_message(msg.sender, msg.content)
         )
@@ -247,6 +248,7 @@ class MainWindow(QMainWindow):
         self._chat_vm.streaming_finished.connect(self._chat_panel.finish_streaming)
         self._chat_vm.tool_activity.connect(self._chat_panel.add_tool_activity)
         self._chat_vm.render_requested.connect(self._vtk_widget.render)
+        self._chat_vm.conversation_cleared.connect(self._chat_panel.clear_display)
         
         self._vtk_vm.render_requested.connect(self._vtk_widget.render)
         self._vtk_vm.actor_added.connect(self._vtk_widget.add_actor)
@@ -266,13 +268,6 @@ class MainWindow(QMainWindow):
     
     def _initialize(self) -> None:
         """Initialize the application state."""
-        engine = self._vtk_vm.render_service.engine
-        if engine:
-            msg = engine.greet("User")
-            self._chat_vm.add_system_message(msg)
-        else:
-            self._chat_vm.add_system_message("Warning - sa_engine not available.")
-        
         self._vtk_vm.clear_scene()
         item = self._pipeline_vm.create_cone_source()
         self._vtk_vm.add_actor(item.actor)

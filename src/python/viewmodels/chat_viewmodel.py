@@ -91,6 +91,7 @@ class ChatViewModel(QObject):
     agent_response = Signal(str)
     render_requested = Signal()
     tool_activity = Signal(str, str)  # tool_name, result
+    conversation_cleared = Signal()
     
     def __init__(self, pipeline_vm: Optional["PipelineViewModel"] = None):
         super().__init__()
@@ -108,13 +109,6 @@ class ChatViewModel(QObject):
         
         if Config.is_configured():
             self._agent = create_agent()
-            if self._agent:
-                self.add_system_message("Agent initialized. Ready to assist.")
-        else:
-            self.add_system_message(
-                "OPENAI_API_KEY not configured. "
-                "Please set it in .env file to enable AI features."
-            )
     
     def set_pipeline_viewmodel(self, vm: "PipelineViewModel") -> None:
         self._pipeline_vm = vm
@@ -218,3 +212,8 @@ class ChatViewModel(QObject):
     def clear_history(self) -> None:
         """Clear chat history."""
         self._messages.clear()
+    
+    def start_new_conversation(self) -> None:
+        """Start a new conversation, clearing chat history only."""
+        self.clear_history()
+        self.conversation_cleared.emit()

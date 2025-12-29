@@ -271,6 +271,7 @@ class ChatPanel(QWidget):
     """Panel for chat/agent interaction."""
     
     message_sent = Signal(str)
+    new_conversation_requested = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -313,6 +314,11 @@ class ChatPanel(QWidget):
         self._send_btn.clicked.connect(self._on_send)
         input_layout.addWidget(self._send_btn)
         
+        self._new_chat_btn = QPushButton("New")
+        self._new_chat_btn.setToolTip("새 대화 시작")
+        self._new_chat_btn.clicked.connect(self._on_new_conversation)
+        input_layout.addWidget(self._new_chat_btn)
+        
         layout.addWidget(input_container)
     
     def _on_send(self) -> None:
@@ -321,6 +327,10 @@ class ChatPanel(QWidget):
         if text:
             self._input.clear()
             self.message_sent.emit(text)
+    
+    def _on_new_conversation(self) -> None:
+        """Handle new conversation button click."""
+        self.new_conversation_requested.emit()
     
     def append_message(self, sender: str, content: str) -> None:
         """Append a message bubble to the display."""
