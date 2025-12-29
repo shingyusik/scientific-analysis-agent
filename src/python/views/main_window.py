@@ -1,5 +1,5 @@
 from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
-                               QMenu, QToolButton, QFileDialog,
+                               QMenu, QToolButton, QFileDialog, QMessageBox,
                                QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
@@ -222,7 +222,6 @@ class MainWindow(QMainWindow):
         self._pipeline_vm.item_removed.connect(self._on_item_removed)
         self._pipeline_vm.item_updated.connect(self._on_item_updated)
         self._pipeline_vm.selection_changed.connect(self._on_selection_changed)
-        self._pipeline_vm.message.connect(self._on_message)
         self._pipeline_vm.time_series_loaded.connect(self._on_time_series_loaded)
         
         self._pipeline_browser.item_selected.connect(self._on_browser_selection)
@@ -300,7 +299,7 @@ class MainWindow(QMainWindow):
         """Handle filter application from menu."""
         selected = self._pipeline_vm.selected_item
         if not selected:
-            self._chat_vm.add_system_message("Please select a source in Pipeline Browser.")
+            QMessageBox.warning(self, "Warning", "Please select a source in Pipeline Browser.")
             return
         
         item = self._pipeline_vm.apply_filter(filter_type, selected.id)
@@ -399,9 +398,6 @@ class MainWindow(QMainWindow):
         if item and "filter" in item.item_type:
             self._update_plane_preview_visibility(item)
     
-    def _on_message(self, message: str) -> None:
-        """Handle status message."""
-        self._chat_vm.add_system_message(message)
     
     def _update_properties_panel(self, item) -> None:
         """Update properties panel for item."""
@@ -463,26 +459,25 @@ class MainWindow(QMainWindow):
         """Handle fit range button click."""
         selected = self._pipeline_vm.selected_item
         if not selected or not selected.actor:
-            self._chat_vm.add_system_message("Please select an item with scalar data.")
+            QMessageBox.warning(self, "Warning", "Please select an item with scalar data.")
             return
         
         if self._vtk_vm.fit_scalar_range(selected.actor):
             self._vtk_vm.update_scalar_bar(selected.actor)
             self._vtk_vm.request_render()
-            self._chat_vm.add_system_message("Scalar range fitted to data min/max.")
         else:
-            self._chat_vm.add_system_message("No scalar data found for selected item.")
+            QMessageBox.warning(self, "Warning", "No scalar data found for selected item.")
     
     def _on_custom_range(self) -> None:
         """Handle custom range button click."""
         selected = self._pipeline_vm.selected_item
         if not selected or not selected.actor:
-            self._chat_vm.add_system_message("Please select an item with scalar data.")
+            QMessageBox.warning(self, "Warning", "Please select an item with scalar data.")
             return
         
         mapper = selected.actor.GetMapper()
         if not mapper or not mapper.GetScalarVisibility():
-            self._chat_vm.add_system_message("Selected item has no scalar data.")
+            QMessageBox.warning(self, "Warning", "Selected item has no scalar data.")
             return
         
         current_range = mapper.GetScalarRange()
@@ -492,15 +487,14 @@ class MainWindow(QMainWindow):
             min_val, max_val = dialog.get_values()
             
             if min_val >= max_val:
-                self._chat_vm.add_system_message("Error: Minimum must be less than maximum.")
+                QMessageBox.critical(self, "Error", "Minimum must be less than maximum.")
                 return
             
-            if self._vtk_vm.set_custom_scalar_range(selected.actor, min_val, max_val):
+            if not self._vtk_vm.set_custom_scalar_range(selected.actor, min_val, max_val):
+                QMessageBox.critical(self, "Error", "Failed to set custom scalar range.")
+            else:
                 self._vtk_vm.update_scalar_bar(selected.actor)
                 self._vtk_vm.request_render()
-                self._chat_vm.add_system_message(f"Scalar range set to [{min_val:.6g}, {max_val:.6g}].")
-            else:
-                self._chat_vm.add_system_message("Failed to set custom scalar range.")
     
     def _on_time_series_loaded(self, item) -> None:
         """Handle time series loaded."""
