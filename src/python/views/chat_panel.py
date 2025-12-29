@@ -4,6 +4,140 @@ from PySide6.QtWidgets import (
     QScrollArea, QLabel, QFrame, QSizePolicy
 )
 from PySide6.QtCore import Signal, Qt, QTimer
+from PySide6.QtGui import QCursor
+
+
+class CollapsibleToolSection(QFrame):
+    """Collapsible section to display tool call activities."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._collapsed = True
+        self._activities = []
+        self._setup_ui()
+    
+    def _setup_ui(self) -> None:
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        self.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        
+        outer_layout = QHBoxLayout(self)
+        outer_layout.setContentsMargins(8, 4, 8, 4)
+        
+        self._container = QFrame()
+        self._container.setFrameShape(QFrame.Shape.StyledPanel)
+        self._container.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
+        self._container.setMaximumWidth(400)
+        self._container.setStyleSheet("""
+            QFrame {
+                background-color: #f5f0e8;
+                border-radius: 8px;
+                border: 1px solid #d0c8b8;
+                padding: 6px 10px;
+            }
+        """)
+        
+        container_layout = QVBoxLayout(self._container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.setSpacing(4)
+        
+        self._header = QLabel()
+        self._header.setStyleSheet("color: #666666; font-size: 12px; font-weight: bold;")
+        self._header.setWordWrap(True)
+        container_layout.addWidget(self._header)
+        
+        self._detail_widget = QWidget()
+        self._detail_layout = QVBoxLayout(self._detail_widget)
+        self._detail_layout.setContentsMargins(0, 4, 0, 0)
+        self._detail_layout.setSpacing(2)
+        self._detail_widget.setVisible(False)
+        container_layout.addWidget(self._detail_widget)
+        
+        outer_layout.addWidget(self._container)
+        outer_layout.addStretch()
+        
+        self._update_header()
+    
+    def mousePressEvent(self, event) -> None:
+        self._toggle_collapsed()
+        super().mousePressEvent(event)
+    
+    def _toggle_collapsed(self) -> None:
+        self._collapsed = not self._collapsed
+        self._detail_widget.setVisible(not self._collapsed)
+        self._update_header()
+    
+    def _update_header(self) -> None:
+        count = len(self._activities)
+        if count == 0:
+            self._header.setText("🔧 Tool 활동 없음")
+            return
+        
+        arrow = "▶" if self._collapsed else "▼"
+        last_tool, last_result = self._activities[-1]
+        
+        if "호출 중" in last_result:
+            status = f"{last_tool} 호출 중..."
+        else:
+            status = f"{last_tool} 완료"
+        
+        self._header.setText(f"{arrow} Tool 활동 ({count}개) - {status}")
+    
+    def add_activity(self, tool_name: str, result: str) -> None:
+        for i, (name, old_result) in enumerate(self._activities):
+            if name == tool_name and "호출 중" in old_result:
+                self._activities[i] = (tool_name, result)
+                self._update_details()
+                self._update_header()
+                return
+        
+        self._activities.append((tool_name, result))
+        
+        activity_label = QLabel()
+        activity_label.setWordWrap(True)
+        activity_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        
+        if "호출 중" in result:
+            text = f"<span style='color: #888;'>⏳ {tool_name}: {result}</span>"
+        else:
+            preview = result[:80] + "..." if len(result) > 80 else result
+            preview = preview.replace('\n', ' ')
+            text = f"<span style='color: #555;'>✓ {tool_name}: {preview}</span>"
+        
+        activity_label.setText(text)
+        activity_label.setStyleSheet("font-size: 11px;")
+        self._detail_layout.addWidget(activity_label)
+        
+        self._update_header()
+    
+    def _update_details(self) -> None:
+        while self._detail_layout.count():
+            item = self._detail_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        for tool_name, result in self._activities:
+            activity_label = QLabel()
+            activity_label.setWordWrap(True)
+            activity_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            
+            if "호출 중" in result:
+                text = f"<span style='color: #888;'>⏳ {tool_name}: {result}</span>"
+            else:
+                preview = result[:80] + "..." if len(result) > 80 else result
+                preview = preview.replace('\n', ' ')
+                text = f"<span style='color: #555;'>✓ {tool_name}: {preview}</span>"
+            
+            activity_label.setText(text)
+            activity_label.setStyleSheet("font-size: 11px;")
+            self._detail_layout.addWidget(activity_label)
+    
+    def clear(self) -> None:
+        self._activities.clear()
+        while self._detail_layout.count():
+            item = self._detail_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._update_header()
 
 
 class MessageBubble(QFrame):
@@ -142,6 +276,7 @@ class ChatPanel(QWidget):
         super().__init__(parent)
         self._streaming_bubble = None
         self._streaming_content = ""
+        self._current_tool_section = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -196,8 +331,21 @@ class ChatPanel(QWidget):
     def start_streaming(self) -> None:
         """Start a streaming message bubble."""
         self._streaming_content = ""
+        self._current_tool_section = None
         self._streaming_bubble = MessageBubble("Agent", "▌")
         self._messages_layout.insertWidget(self._messages_layout.count() - 1, self._streaming_bubble)
+        self._scroll_to_bottom()
+    
+    def add_tool_activity(self, tool_name: str, result: str) -> None:
+        """Add a tool activity to the current tool section."""
+        if self._current_tool_section is None:
+            self._current_tool_section = CollapsibleToolSection()
+            insert_pos = self._messages_layout.count() - 1
+            if self._streaming_bubble:
+                insert_pos -= 1
+            self._messages_layout.insertWidget(insert_pos, self._current_tool_section)
+        
+        self._current_tool_section.add_activity(tool_name, result)
         self._scroll_to_bottom()
     
     def update_streaming(self, content: str) -> None:
@@ -213,6 +361,7 @@ class ChatPanel(QWidget):
             self._streaming_bubble.update_content(self._streaming_content)
         self._streaming_bubble = None
         self._streaming_content = ""
+        self._current_tool_section = None
     
     def _scroll_to_bottom(self) -> None:
         """Scroll to the bottom of the chat."""

@@ -1,6 +1,6 @@
 from PySide6.QtCore import QObject, Signal, QThread
 from typing import List, Optional, TYPE_CHECKING
-from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, BaseMessage
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 
 from config import Config
 from agent import create_agent, set_pipeline_viewmodel
@@ -32,6 +32,7 @@ class StreamingAgentWorker(QThread):
     """Worker thread for streaming agent execution."""
     
     token_received = Signal(str)
+    tool_activity = Signal(str, str)  # tool_name, result
     finished = Signal(bool)
     error = Signal(str)
     
@@ -57,11 +58,21 @@ class StreamingAgentWorker(QThread):
                 if isinstance(message, AIMessageChunk):
                     if node_name == "guardrail":
                         continue
+                    if hasattr(message, 'tool_call_chunks') and message.tool_call_chunks:
+                        for tc in message.tool_call_chunks:
+                            if tc.get('name'):
+                                self.tool_activity.emit(tc['name'], "호출 중...")
                     if message.content:
                         self.token_received.emit(message.content)
                 elif isinstance(message, AIMessage):
+                    if hasattr(message, 'tool_calls') and message.tool_calls:
+                        for tc in message.tool_calls:
+                            self.tool_activity.emit(tc['name'], "호출 중...")
                     if message.content:
                         self.token_received.emit(message.content)
+                elif isinstance(message, ToolMessage):
+                    result_preview = message.content[:100] if len(message.content) > 100 else message.content
+                    self.tool_activity.emit(message.name, result_preview)
             
             self.finished.emit(is_blocked)
         except Exception as e:
@@ -79,6 +90,7 @@ class ChatViewModel(QObject):
     agent_thinking = Signal()
     agent_response = Signal(str)
     render_requested = Signal()
+    tool_activity = Signal(str, str)  # tool_name, result
     
     def __init__(self, pipeline_vm: Optional["PipelineViewModel"] = None):
         super().__init__()
@@ -157,6 +169,7 @@ class ChatViewModel(QObject):
         lc_messages = self._get_langchain_messages()
         self._worker = StreamingAgentWorker(self._agent, lc_messages, self)
         self._worker.token_received.connect(self._on_token_received)
+        self._worker.tool_activity.connect(self._on_tool_activity)
         self._worker.finished.connect(self._on_streaming_finished)
         self._worker.error.connect(self._on_agent_error)
         self._worker.start()
@@ -164,6 +177,9 @@ class ChatViewModel(QObject):
     def _on_token_received(self, token: str) -> None:
         self._current_response += token
         self.streaming_token.emit(self._current_response)
+    
+    def _on_tool_activity(self, tool_name: str, result: str) -> None:
+        self.tool_activity.emit(tool_name, result)
     
     def _on_streaming_finished(self, is_blocked: bool) -> None:
         if self._current_response:

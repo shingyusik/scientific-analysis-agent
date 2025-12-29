@@ -245,6 +245,7 @@ class MainWindow(QMainWindow):
         self._chat_vm.streaming_started.connect(self._chat_panel.start_streaming)
         self._chat_vm.streaming_token.connect(self._chat_panel.update_streaming)
         self._chat_vm.streaming_finished.connect(self._chat_panel.finish_streaming)
+        self._chat_vm.tool_activity.connect(self._chat_panel.add_tool_activity)
         self._chat_vm.render_requested.connect(self._vtk_widget.render)
         
         self._vtk_vm.render_requested.connect(self._vtk_widget.render)
