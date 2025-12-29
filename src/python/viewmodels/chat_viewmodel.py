@@ -1,6 +1,6 @@
 from PySide6.QtCore import QObject, Signal, QThread
 from typing import List, Optional, TYPE_CHECKING
-from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, BaseMessage
 
 from config import Config
 from agent import create_agent, set_pipeline_viewmodel
@@ -18,6 +18,14 @@ class ChatMessage:
     
     def __str__(self) -> str:
         return f"{self.sender}: {self.content}"
+    
+    def to_langchain_message(self) -> Optional[BaseMessage]:
+        """Convert to LangChain message format."""
+        if self.sender == "User":
+            return HumanMessage(content=self.content)
+        elif self.sender == "Agent":
+            return AIMessage(content=self.content)
+        return None
 
 
 class StreamingAgentWorker(QThread):
@@ -27,15 +35,15 @@ class StreamingAgentWorker(QThread):
     finished = Signal()
     error = Signal(str)
     
-    def __init__(self, agent, message: str, parent=None):
+    def __init__(self, agent, messages: List[BaseMessage], parent=None):
         super().__init__(parent)
         self._agent = agent
-        self._message = message
+        self._messages = messages
     
     def run(self):
         try:
             for event in self._agent.stream(
-                {"messages": [HumanMessage(content=self._message)], "pipeline_context": {}},
+                {"messages": self._messages, "pipeline_context": {}},
                 stream_mode="messages"
             ):
                 message, metadata = event
@@ -96,6 +104,15 @@ class ChatViewModel(QObject):
     def is_agent_available(self) -> bool:
         return self._agent is not None
     
+    def _get_langchain_messages(self) -> List[BaseMessage]:
+        """Convert chat history to LangChain message format."""
+        lc_messages = []
+        for msg in self._messages:
+            lc_msg = msg.to_langchain_message()
+            if lc_msg:
+                lc_messages.append(lc_msg)
+        return lc_messages
+    
     def add_system_message(self, content: str) -> None:
         """Add a system message."""
         msg = ChatMessage("System", content)
@@ -111,9 +128,9 @@ class ChatViewModel(QObject):
         self._messages.append(msg)
         self.message_added.emit(msg)
         
-        self._process_with_agent(content)
+        self._process_with_agent()
     
-    def _process_with_agent(self, content: str) -> None:
+    def _process_with_agent(self) -> None:
         """Process message with LangGraph agent using streaming."""
         self.agent_thinking.emit()
         
@@ -125,7 +142,8 @@ class ChatViewModel(QObject):
         self._current_response = ""
         self.streaming_started.emit()
         
-        self._worker = StreamingAgentWorker(self._agent, content, self)
+        lc_messages = self._get_langchain_messages()
+        self._worker = StreamingAgentWorker(self._agent, lc_messages, self)
         self._worker.token_received.connect(self._on_token_received)
         self._worker.finished.connect(self._on_streaming_finished)
         self._worker.error.connect(self._on_agent_error)
