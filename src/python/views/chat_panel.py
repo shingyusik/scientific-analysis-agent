@@ -3,19 +3,21 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QScrollArea, QLabel, QFrame, QSizePolicy
 )
-from PySide6.QtCore import Signal, Qt
+from PySide6.QtCore import Signal, Qt, QTimer
 
 
 class MessageBubble(QFrame):
     """Chat message bubble widget."""
     
-    def __init__(self, sender: str, content: str, parent=None):
+    def __init__(self, sender: str, content: str = "", parent=None):
         super().__init__(parent)
         self._sender = sender
+        self._content_label = None
+        self._is_user = sender == "User"
         self._setup_ui(sender, content)
     
     def _setup_ui(self, sender: str, content: str) -> None:
-        is_user = sender == "User"
+        is_user = self._is_user
         is_system = sender == "System"
         
         self.setFrameShape(QFrame.Shape.NoFrame)
@@ -65,26 +67,34 @@ class MessageBubble(QFrame):
             sender_label.setStyleSheet("color: #666666; font-size: 11px; font-weight: bold;")
             bubble_layout.addWidget(sender_label)
         
-        content_label = QLabel()
-        content_label.setWordWrap(True)
-        content_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        content_label.setOpenExternalLinks(True)
+        self._content_label = QLabel()
+        self._content_label.setWordWrap(True)
+        self._content_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self._content_label.setOpenExternalLinks(True)
         
         if is_user:
-            content_label.setText(content)
-            content_label.setStyleSheet("color: #ffffff; font-size: 13px;")
+            self._content_label.setText(content)
+            self._content_label.setStyleSheet("color: #ffffff; font-size: 13px;")
         else:
-            html_content = self._render_markdown(content)
-            content_label.setTextFormat(Qt.TextFormat.RichText)
-            content_label.setText(html_content)
-            content_label.setStyleSheet("color: #000000; font-size: 13px;")
+            self._content_label.setTextFormat(Qt.TextFormat.RichText)
+            self._content_label.setStyleSheet("color: #000000; font-size: 13px;")
+            if content:
+                self._content_label.setText(self._render_markdown(content))
         
-        bubble_layout.addWidget(content_label)
+        bubble_layout.addWidget(self._content_label)
         
         outer_layout.addWidget(bubble)
         
         if not is_user:
             outer_layout.addStretch()
+    
+    def update_content(self, content: str) -> None:
+        """Update the message content (for streaming)."""
+        if self._content_label:
+            if self._is_user:
+                self._content_label.setText(content)
+            else:
+                self._content_label.setText(self._render_markdown(content))
     
     def _render_markdown(self, content: str) -> str:
         """Convert markdown to styled HTML."""
@@ -130,6 +140,7 @@ class ChatPanel(QWidget):
     
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._streaming_bubble = None
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -179,13 +190,38 @@ class ChatPanel(QWidget):
         """Append a message bubble to the display."""
         bubble = MessageBubble(sender, content)
         self._messages_layout.insertWidget(self._messages_layout.count() - 1, bubble)
-        
-        self._scroll_area.verticalScrollBar().setValue(
+        self._scroll_to_bottom()
+    
+    def start_streaming(self) -> None:
+        """Start a streaming message bubble."""
+        self._streaming_bubble = MessageBubble("Agent", "▌")
+        self._messages_layout.insertWidget(self._messages_layout.count() - 1, self._streaming_bubble)
+        self._scroll_to_bottom()
+    
+    def update_streaming(self, content: str) -> None:
+        """Update the streaming message content."""
+        if self._streaming_bubble:
+            self._streaming_bubble.update_content(content + "▌")
+            self._scroll_to_bottom()
+    
+    def finish_streaming(self) -> None:
+        """Finish streaming and finalize the message."""
+        if self._streaming_bubble:
+            current_text = self._streaming_bubble._content_label.toPlainText() if self._streaming_bubble._content_label else ""
+            if current_text.endswith("▌"):
+                current_text = current_text[:-1]
+            self._streaming_bubble.update_content(current_text)
+        self._streaming_bubble = None
+    
+    def _scroll_to_bottom(self) -> None:
+        """Scroll to the bottom of the chat."""
+        QTimer.singleShot(10, lambda: self._scroll_area.verticalScrollBar().setValue(
             self._scroll_area.verticalScrollBar().maximum()
-        )
+        ))
     
     def clear_display(self) -> None:
         """Clear the chat display."""
+        self._streaming_bubble = None
         while self._messages_layout.count() > 1:
             item = self._messages_layout.takeAt(0)
             if item.widget():

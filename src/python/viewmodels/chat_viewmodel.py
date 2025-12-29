@@ -1,6 +1,6 @@
 from PySide6.QtCore import QObject, Signal, QThread
 from typing import List, Optional, TYPE_CHECKING
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk
 
 from config import Config
 from agent import create_agent, set_pipeline_viewmodel
@@ -20,10 +20,11 @@ class ChatMessage:
         return f"{self.sender}: {self.content}"
 
 
-class AgentWorker(QThread):
-    """Worker thread for agent execution."""
+class StreamingAgentWorker(QThread):
+    """Worker thread for streaming agent execution."""
     
-    finished = Signal(str)
+    token_received = Signal(str)
+    finished = Signal()
     error = Signal(str)
     
     def __init__(self, agent, message: str, parent=None):
@@ -33,20 +34,16 @@ class AgentWorker(QThread):
     
     def run(self):
         try:
-            result = self._agent.invoke({
-                "messages": [HumanMessage(content=self._message)],
-                "pipeline_context": {}
-            })
+            for event in self._agent.stream(
+                {"messages": [HumanMessage(content=self._message)], "pipeline_context": {}},
+                stream_mode="messages"
+            ):
+                message, metadata = event
+                if isinstance(message, AIMessageChunk):
+                    if message.content:
+                        self.token_received.emit(message.content)
             
-            messages = result.get("messages", [])
-            if messages:
-                last_message = messages[-1]
-                if isinstance(last_message, AIMessage):
-                    self.finished.emit(last_message.content)
-                else:
-                    self.finished.emit(str(last_message))
-            else:
-                self.finished.emit("No response from agent")
+            self.finished.emit()
         except Exception as e:
             self.error.emit(str(e))
 
@@ -55,6 +52,10 @@ class ChatViewModel(QObject):
     """ViewModel for chat/agent interaction."""
     
     message_added = Signal(object)  # ChatMessage
+    message_updated = Signal(str, str)  # message_id, new_content
+    streaming_started = Signal()
+    streaming_token = Signal(str)
+    streaming_finished = Signal()
     agent_thinking = Signal()
     agent_response = Signal(str)
     render_requested = Signal()
@@ -64,7 +65,8 @@ class ChatViewModel(QObject):
         self._messages: List[ChatMessage] = []
         self._agent = None
         self._pipeline_vm = pipeline_vm
-        self._worker: Optional[AgentWorker] = None
+        self._worker: Optional[StreamingAgentWorker] = None
+        self._current_response = ""
         
         self._initialize_agent()
     
@@ -112,7 +114,7 @@ class ChatViewModel(QObject):
         self._process_with_agent(content)
     
     def _process_with_agent(self, content: str) -> None:
-        """Process message with LangGraph agent."""
+        """Process message with LangGraph agent using streaming."""
         self.agent_thinking.emit()
         
         if not self._agent:
@@ -120,18 +122,32 @@ class ChatViewModel(QObject):
             self._add_agent_response(response)
             return
         
-        self._worker = AgentWorker(self._agent, content, self)
-        self._worker.finished.connect(self._on_agent_finished)
+        self._current_response = ""
+        self.streaming_started.emit()
+        
+        self._worker = StreamingAgentWorker(self._agent, content, self)
+        self._worker.token_received.connect(self._on_token_received)
+        self._worker.finished.connect(self._on_streaming_finished)
         self._worker.error.connect(self._on_agent_error)
         self._worker.start()
     
-    def _on_agent_finished(self, response: str) -> None:
-        self._add_agent_response(response)
+    def _on_token_received(self, token: str) -> None:
+        self._current_response += token
+        self.streaming_token.emit(self._current_response)
+    
+    def _on_streaming_finished(self) -> None:
+        if self._current_response:
+            msg = ChatMessage("Agent", self._current_response)
+            self._messages.append(msg)
+            self.agent_response.emit(self._current_response)
+        
+        self.streaming_finished.emit()
         self.render_requested.emit()
         self._cleanup_worker()
     
     def _on_agent_error(self, error: str) -> None:
         self._add_agent_response(f"Error: {error}")
+        self.streaming_finished.emit()
         self._cleanup_worker()
     
     def _add_agent_response(self, response: str) -> None:
