@@ -14,6 +14,7 @@ dependencies = [
     "langchain[openai]",
     "pybind11",
     "python-dotenv",
+    "markdown",
 ]
 
 [build-system]

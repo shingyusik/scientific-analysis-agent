@@ -1,3 +1,4 @@
+import markdown
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
     QScrollArea, QLabel, QFrame, QSizePolicy
@@ -64,13 +65,18 @@ class MessageBubble(QFrame):
             sender_label.setStyleSheet("color: #666666; font-size: 11px; font-weight: bold;")
             bubble_layout.addWidget(sender_label)
         
-        content_label = QLabel(content)
+        content_label = QLabel()
         content_label.setWordWrap(True)
         content_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        content_label.setOpenExternalLinks(True)
         
         if is_user:
+            content_label.setText(content)
             content_label.setStyleSheet("color: #ffffff; font-size: 13px;")
         else:
+            html_content = self._render_markdown(content)
+            content_label.setTextFormat(Qt.TextFormat.RichText)
+            content_label.setText(html_content)
             content_label.setStyleSheet("color: #000000; font-size: 13px;")
         
         bubble_layout.addWidget(content_label)
@@ -79,6 +85,42 @@ class MessageBubble(QFrame):
         
         if not is_user:
             outer_layout.addStretch()
+    
+    def _render_markdown(self, content: str) -> str:
+        """Convert markdown to styled HTML."""
+        html = markdown.markdown(
+            content,
+            extensions=['fenced_code', 'tables', 'nl2br']
+        )
+        
+        styled_html = f"""
+        <style>
+            code {{
+                background-color: #e8e8e8;
+                padding: 2px 5px;
+                border-radius: 3px;
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 12px;
+            }}
+            pre {{
+                background-color: #e8e8e8;
+                padding: 8px;
+                border-radius: 6px;
+                overflow-x: auto;
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 12px;
+            }}
+            ul, ol {{
+                margin: 4px 0;
+                padding-left: 20px;
+            }}
+            p {{
+                margin: 4px 0;
+            }}
+        </style>
+        {html}
+        """
+        return styled_html
 
 
 class ChatPanel(QWidget):
