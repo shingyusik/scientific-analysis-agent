@@ -73,6 +73,10 @@ def apply_slice_filter(
     normal_x: float = 1.0,
     normal_y: float = 0.0,
     normal_z: float = 0.0,
+    origin_x: Optional[float] = None,
+    origin_y: Optional[float] = None,
+    origin_z: Optional[float] = None,
+    offsets: str = "0.0",
     show_plane: bool = True,
     item_id: Optional[str] = None
 ) -> str:
@@ -82,6 +86,10 @@ def apply_slice_filter(
         normal_x: X component of the slice plane normal vector (default: 1.0 for YZ plane)
         normal_y: Y component of the slice plane normal vector (default: 0.0)
         normal_z: Z component of the slice plane normal vector (default: 0.0)
+        origin_x: X coordinate of the slice plane origin (optional, defaults to data center)
+        origin_y: Y coordinate of the slice plane origin (optional, defaults to data center)
+        origin_z: Z coordinate of the slice plane origin (optional, defaults to data center)
+        offsets: Comma-separated list of offset values for multiple slices (default: "0.0")
         show_plane: Whether to show the interactive slice plane widget (default: True)
         item_id: ID of the item to apply filter to. If not provided, uses selected item.
     """
@@ -97,12 +105,22 @@ def apply_slice_filter(
     if not target_item:
         return f"Error: Item {target_id} not found"
     
-    center = target_item.vtk_data.GetCenter() if target_item.vtk_data else (0, 0, 0)
+    center = target_item.vtk_data.GetCenter() if target_item.vtk_data else (0.0, 0.0, 0.0)
+    origin = [
+        origin_x if origin_x is not None else center[0],
+        origin_y if origin_y is not None else center[1],
+        origin_z if origin_z is not None else center[2]
+    ]
+    
+    try:
+        offset_list = [float(x.strip()) for x in offsets.split(",")]
+    except ValueError:
+        return "Error: Invalid offsets format. Use comma-separated numbers (e.g., '0.0' or '-1.0,0.0,1.0')"
     
     params = {
-        "origin": list(center),
+        "origin": origin,
         "normal": [normal_x, normal_y, normal_z],
-        "offsets": [0.0],
+        "offsets": offset_list,
         "show_preview": show_plane
     }
     
@@ -118,7 +136,9 @@ def apply_clip_filter(
     normal_x: float = 1.0,
     normal_y: float = 0.0,
     normal_z: float = 0.0,
-    inside_out: bool = False,
+    origin_x: Optional[float] = None,
+    origin_y: Optional[float] = None,
+    origin_z: Optional[float] = None,
     show_plane: bool = True,
     item_id: Optional[str] = None
 ) -> str:
@@ -128,7 +148,9 @@ def apply_clip_filter(
         normal_x: X component of the clip plane normal vector (default: 1.0)
         normal_y: Y component of the clip plane normal vector (default: 0.0)
         normal_z: Z component of the clip plane normal vector (default: 0.0)
-        inside_out: If True, keeps the opposite side of the plane (default: False)
+        origin_x: X coordinate of the clip plane origin (optional, defaults to data center)
+        origin_y: Y coordinate of the clip plane origin (optional, defaults to data center)
+        origin_z: Z coordinate of the clip plane origin (optional, defaults to data center)
         show_plane: Whether to show the interactive clip plane widget (default: True)
         item_id: ID of the item to apply filter to. If not provided, uses selected item.
     """
@@ -144,12 +166,16 @@ def apply_clip_filter(
     if not target_item:
         return f"Error: Item {target_id} not found"
     
-    center = target_item.vtk_data.GetCenter() if target_item.vtk_data else (0, 0, 0)
+    center = target_item.vtk_data.GetCenter() if target_item.vtk_data else (0.0, 0.0, 0.0)
+    origin = [
+        origin_x if origin_x is not None else center[0],
+        origin_y if origin_y is not None else center[1],
+        origin_z if origin_z is not None else center[2]
+    ]
     
     params = {
-        "origin": list(center),
+        "origin": origin,
         "normal": [normal_x, normal_y, normal_z],
-        "inside_out": inside_out,
         "show_preview": show_plane
     }
     
@@ -264,18 +290,9 @@ def get_filter_params(item_id: Optional[str] = None) -> str:
     result = [f"Filter: {item.name} (id: {item.id}, type: {item.item_type})"]
     result.append("Parameters:")
     
-    if item.item_type == "slice_filter":
-        origin = params.get("origin", [0, 0, 0])
-        normal = params.get("normal", [1, 0, 0])
-        offsets = params.get("offsets", [0.0])
-        result.append(f"  - origin: [{origin[0]:.4f}, {origin[1]:.4f}, {origin[2]:.4f}]")
-        result.append(f"  - normal: [{normal[0]:.4f}, {normal[1]:.4f}, {normal[2]:.4f}]")
-        result.append(f"  - offsets: {offsets}")
-    elif item.item_type == "clip_filter":
-        origin = params.get("origin", [0, 0, 0])
-        normal = params.get("normal", [1, 0, 0])
-        result.append(f"  - origin: [{origin[0]:.4f}, {origin[1]:.4f}, {origin[2]:.4f}]")
-        result.append(f"  - normal: [{normal[0]:.4f}, {normal[1]:.4f}, {normal[2]:.4f}]")
+    filter_instance = vm.get_filter(item.item_type)
+    if filter_instance:
+        result.append(filter_instance.format_params(params))
     else:
         for key, value in params.items():
             result.append(f"  - {key}: {value}")
@@ -459,6 +476,156 @@ def update_clip_filter_params(
         return f"Updated clip filter '{item.name}' (not applied yet): {', '.join(updated)}"
 
 
+@tool
+def set_representation(style: str, item_id: Optional[str] = None) -> str:
+    """Set the representation style of an item (e.g., Surface, Wireframe, Points).
+    
+    Args:
+        style: Representation style. One of: "Surface", "Surface With Edges", "Wireframe", "Points", "Point Gaussian".
+        item_id: ID of the item. If not provided, uses selected item.
+    """
+    vm = get_pipeline_viewmodel()
+    if not vm:
+        return "Error: Pipeline not initialized"
+    
+    target_id = item_id or (vm.selected_item.id if vm.selected_item else None)
+    if not target_id:
+        return "Error: No item selected"
+    
+    item = vm.items.get(target_id)
+    if not item:
+        return f"Error: Item {target_id} not found"
+    
+    vm.set_representation(target_id, style)
+    return f"Set '{item.name}' representation to '{style}'"
+
+
+@tool
+def set_opacity(opacity: float, item_id: Optional[str] = None) -> str:
+    """Set the opacity of an item.
+    
+    Args:
+        opacity: Opacity value between 0.0 (transparent) and 1.0 (opaque).
+        item_id: ID of the item. If not provided, uses selected item.
+    """
+    vm = get_pipeline_viewmodel()
+    if not vm:
+        return "Error: Pipeline not initialized"
+    
+    target_id = item_id or (vm.selected_item.id if vm.selected_item else None)
+    if not target_id:
+        return "Error: No item selected"
+    
+    item = vm.items.get(target_id)
+    if not item:
+        return f"Error: Item {target_id} not found"
+    
+    vm.set_opacity(target_id, opacity)
+    return f"Set '{item.name}' opacity to {opacity}"
+
+
+@tool
+def set_visual_property(
+    point_size: Optional[float] = None,
+    line_width: Optional[float] = None,
+    gaussian_scale: Optional[float] = None,
+    item_id: Optional[str] = None
+) -> str:
+    """Set visual properties like point size, line width, or gaussian scale.
+    
+    Args:
+        point_size: Size of points (when representation is "Points").
+        line_width: Width of lines (when representation is "Wireframe" or "Surface With Edges").
+        gaussian_scale: Scale factor (when representation is "Point Gaussian").
+        item_id: ID of the item. If not provided, uses selected item.
+    """
+    vm = get_pipeline_viewmodel()
+    if not vm:
+        return "Error: Pipeline not initialized"
+    
+    target_id = item_id or (vm.selected_item.id if vm.selected_item else None)
+    if not target_id:
+        return "Error: No item selected"
+    
+    item = vm.items.get(target_id)
+    if not item:
+        return f"Error: Item {target_id} not found"
+    
+    updates = []
+    if point_size is not None:
+        vm.set_point_size(target_id, point_size)
+        updates.append(f"point_size={point_size}")
+    if line_width is not None:
+        vm.set_line_width(target_id, line_width)
+        updates.append(f"line_width={line_width}")
+    if gaussian_scale is not None:
+        vm.set_gaussian_scale(target_id, gaussian_scale)
+        updates.append(f"gaussian_scale={gaussian_scale}")
+    
+    if not updates:
+        return "No properties specified to update."
+    
+    return f"Updated visual properties for '{item.name}': {', '.join(updates)}"
+
+
+@tool
+def auto_fit_scalar_range(item_id: Optional[str] = None) -> str:
+    """Automatically fit the scalar coloring range of an item to its data min/max values.
+    
+    Args:
+        item_id: ID of the item. If not provided, uses selected item.
+    """
+    vm = get_pipeline_viewmodel()
+    if not vm:
+        return "Error: Pipeline not initialized"
+    
+    target_id = item_id or (vm.selected_item.id if vm.selected_item else None)
+    if not target_id:
+        return "Error: No item selected"
+    
+    item = vm.items.get(target_id)
+    if not item:
+        return f"Error: Item {target_id} not found"
+    
+    success = vm.render_service.fit_scalar_range(item.actor)
+    if success:
+        vm.item_updated.emit(item)
+        return f"Rescaled '{item.name}' scalar range to match data bounds."
+    return f"Error: Failed to auto-fit range for '{item.name}' (maybe not colored by array?)"
+
+
+@tool
+def set_scalar_range(
+    min_val: float,
+    max_val: float,
+    item_id: Optional[str] = None
+) -> str:
+    """Set a custom scalar coloring range for an item.
+    
+    Args:
+        min_val: Minimum value for the scalar range.
+        max_val: Maximum value for the scalar range.
+        item_id: ID of the item. If not provided, uses selected item.
+    """
+    vm = get_pipeline_viewmodel()
+    if not vm:
+        return "Error: Pipeline not initialized"
+    
+    target_id = item_id or (vm.selected_item.id if vm.selected_item else None)
+    if not target_id:
+        return "Error: No item selected"
+    
+    item = vm.items.get(target_id)
+    if not item:
+        return f"Error: Item {target_id} not found"
+    
+    success = vm.render_service.set_custom_scalar_range(item.actor, min_val, max_val)
+    if success:
+        vm.item_updated.emit(item)
+        return f"Set '{item.name}' scalar range to [{min_val}, {max_val}]."
+    return f"Error: Failed to set custom range for '{item.name}'"
+
+
 @tool(args_schema=InputRequest)
 def request_user_input(
     description: str,
@@ -493,6 +660,11 @@ def get_all_tools() -> list:
         apply_clip_filter,
         set_visibility,
         set_color_by,
+        set_representation,
+        set_opacity,
+        set_visual_property,
+        auto_fit_scalar_range,
+        set_scalar_range,
         delete_item,
         get_filter_params,
         update_slice_filter_params,

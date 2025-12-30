@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from typing import Any, Tuple, Optional, List
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QGroupBox, QFormLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox
 from PySide6.QtCore import Signal
@@ -6,13 +7,13 @@ from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox
 
 
+@dataclass
 class ClipParams:
     """Parameters for clip filter."""
     
-    def __init__(self, origin=None, normal=None, show_preview=True):
-        self.origin = origin or [0.0, 0.0, 0.0]
-        self.normal = normal or [1.0, 0.0, 0.0]
-        self.show_preview = show_preview
+    origin: List[float] = field(default_factory=lambda: [0.0, 0.0, 0.0])
+    normal: List[float] = field(default_factory=lambda: [1.0, 0.0, 0.0])
+    show_preview: bool = True
     
     def to_dict(self) -> dict:
         return {
@@ -44,6 +45,10 @@ class ClipFilter(FilterBase):
     @property
     def display_name(self) -> str:
         return "Clip"
+    
+    @property
+    def params_class(self) -> type:
+        return ClipParams
     
     def apply_filter(self, data: Any, params: dict) -> Tuple[Any, Any]:
         """Apply clip filter."""

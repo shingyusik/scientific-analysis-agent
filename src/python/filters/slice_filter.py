@@ -61,6 +61,10 @@ class SliceFilter(FilterBase):
     def display_name(self) -> str:
         return "Slice"
     
+    @property
+    def params_class(self) -> type:
+        return SliceParams
+    
     def apply_filter(self, data: Any, params: dict) -> Tuple[Any, Any]:
         """Apply slice filter with multiple offsets."""
         slice_params = SliceParams.from_dict(params)

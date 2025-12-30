@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import dataclasses
 from typing import Any, Tuple, Optional, List
 from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Signal
@@ -20,10 +21,14 @@ class FilterBase(ABC):
         return True
     
     @property
-    @abstractmethod
     def filter_type(self) -> str:
         """Return the filter type identifier (e.g., 'slice_filter')."""
         pass
+    
+    @property
+    def params_class(self) -> Optional[type]:
+        """Return the parameter class (dataclass) for this filter."""
+        return None
     
     @property
     @abstractmethod
@@ -103,4 +108,36 @@ class FilterBase(ABC):
             Tuple of (origin, normal, show_preview) or None if no preview supported
         """
         return None
+
+    def format_params(self, params: dict) -> str:
+        """
+        Format filter parameters for display using the params_class if available.
+        
+        Args:
+            params: Filter parameters dictionary
+            
+        Returns:
+            Formatted string representation of parameters
+        """
+        cls = self.params_class
+        if cls and dataclasses.is_dataclass(cls) and hasattr(cls, "from_dict"):
+            try:
+                obj = cls.from_dict(params)
+                result = []
+                for field in dataclasses.fields(obj):
+                    val = getattr(obj, field.name)
+                    if isinstance(val, list) and len(val) > 0 and all(isinstance(x, (int, float)) for x in val):
+                        formatted_val = "[" + ", ".join(f"{x:.4f}" for x in val) + "]"
+                    else:
+                        formatted_val = str(val)
+                    result.append(f"  - {field.name}: {formatted_val}")
+                return "\n".join(result)
+            except Exception:
+                # Fallback to default formatting if something goes wrong
+                pass
+        
+        result = []
+        for key, value in params.items():
+            result.append(f"  - {key}: {value}")
+        return "\n".join(result)
 
