@@ -13,3 +13,7 @@
 - [ ] representation 툴
 - [ ] time 스텝 옮기기 툴 (재생, 앞/뒤로가기, 맨 앞/뒤로가기, 특정 step으로 가기)
 - [ ] coloring range 조정 툴
+- [ ] 대화 중단 버튼
+- [ ] 이미지 input
+- [ ] 구조화된 출력 사용
+- [ ] 툴 input 더 상세히

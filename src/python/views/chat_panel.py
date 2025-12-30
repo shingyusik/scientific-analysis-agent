@@ -1,7 +1,8 @@
 import markdown
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QPushButton,
-    QScrollArea, QLabel, QFrame, QSizePolicy
+    QScrollArea, QLabel, QFrame, QSizePolicy, QFormLayout,
+    QDoubleSpinBox, QCheckBox, QComboBox
 )
 from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtGui import QCursor
@@ -267,6 +268,134 @@ class MessageBubble(QFrame):
         return styled_html
 
 
+class InputFormBubble(QFrame):
+    """Message bubble that shows a form for user input."""
+    
+    submitted = Signal(dict)
+    
+    def __init__(self, description: str, fields: list, parent=None):
+        super().__init__(parent)
+        self._fields = fields
+        self._widgets = {}
+        self._setup_ui(description, fields)
+    
+    def _setup_ui(self, description: str, fields: list) -> None:
+        self.setFrameShape(QFrame.Shape.NoFrame)
+        
+        outer_layout = QHBoxLayout(self)
+        outer_layout.setContentsMargins(8, 4, 8, 4)
+        
+        bubble = QFrame()
+        bubble.setFrameShape(QFrame.Shape.StyledPanel)
+        bubble.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        bubble.setMaximumWidth(400)
+        bubble.setStyleSheet("""
+            QFrame {
+                background-color: #fce4ec;
+                border-radius: 12px;
+                border: 2px solid #f06292;
+                padding: 12px;
+            }
+            QLabel {
+                color: #880e4f;
+                font-size: 13px;
+                background: transparent;
+                border: none;
+            }
+            QPushButton {
+                background-color: #f06292;
+                color: white;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #ec407a;
+            }
+            QLineEdit, QDoubleSpinBox, QComboBox {
+                border: 1px solid #f06292;
+                border-radius: 4px;
+                padding: 4px;
+                background: white;
+            }
+        """)
+        
+        layout = QVBoxLayout(bubble)
+        layout.setSpacing(10)
+        
+        desc_label = QLabel(description)
+        desc_label.setWordWrap(True)
+        desc_label.setStyleSheet("font-weight: bold; margin-bottom: 5px;")
+        layout.addWidget(desc_label)
+        
+        form_layout = QFormLayout()
+        form_layout.setSpacing(8)
+        
+        for field in fields:
+            name = field.get("name")
+            label = field.get("label", name)
+            field_type = field.get("type", "text")
+            default = field.get("default")
+            
+            widget = None
+            if field_type == "text":
+                widget = QLineEdit()
+                if default: widget.setText(str(default))
+            elif field_type == "number":
+                widget = QDoubleSpinBox()
+                min_val = field.get("min")
+                max_val = field.get("max")
+                step_val = field.get("step")
+                
+                widget.setRange(
+                    float(min_val) if min_val is not None else -1e10,
+                    float(max_val) if max_val is not None else 1e10
+                )
+                widget.setSingleStep(float(step_val) if step_val is not None else 0.1)
+                if default is not None: widget.setValue(float(default))
+            elif field_type == "boolean":
+                widget = QCheckBox()
+                if default: widget.setChecked(bool(default))
+            elif field_type == "select":
+                widget = QComboBox()
+                options = field.get("options", [])
+                widget.addItems([str(opt) for opt in options])
+                if default in options:
+                    widget.setCurrentText(str(default))
+            
+            if widget:
+                self._widgets[name] = widget
+                form_layout.addRow(label, widget)
+        
+        layout.addLayout(form_layout)
+        
+        self._submit_btn = QPushButton("제출하기 (Submit)")
+        self._submit_btn.clicked.connect(self._on_submit)
+        layout.addWidget(self._submit_btn)
+        
+        outer_layout.addWidget(bubble)
+        outer_layout.addStretch()
+    
+    def _on_submit(self) -> None:
+        values = {}
+        for name, widget in self._widgets.items():
+            if isinstance(widget, QLineEdit):
+                values[name] = widget.text()
+            elif isinstance(widget, QDoubleSpinBox):
+                values[name] = widget.value()
+            elif isinstance(widget, QCheckBox):
+                values[name] = widget.isChecked()
+            elif isinstance(widget, QComboBox):
+                values[name] = widget.currentText()
+        
+        self.submitted.emit(values)
+        self._submit_btn.setEnabled(False)
+        self._submit_btn.setText("제출됨")
+        # Disable all widgets
+        for widget in self._widgets.values():
+            widget.setEnabled(False)
+
+
 class ChatPanel(QWidget):
     """Panel for chat/agent interaction."""
     
@@ -278,6 +407,7 @@ class ChatPanel(QWidget):
         self._streaming_bubble = None
         self._streaming_content = ""
         self._current_tool_section = None
+        self._is_waiting_for_input = False
         self._setup_ui()
     
     def _setup_ui(self) -> None:
@@ -321,12 +451,46 @@ class ChatPanel(QWidget):
         
         layout.addWidget(input_container)
     
+    def show_input_form(self, description: str, fields: list, chat_vm) -> None:
+        """Show an input form bubble."""
+        # Store chat_vm for submission
+        self._current_chat_vm = chat_vm
+        form = InputFormBubble(description, fields)
+        form.submitted.connect(self._on_form_submitted)
+        self._messages_layout.insertWidget(self._messages_layout.count() - 1, form)
+        self._scroll_to_bottom()
+        self._is_waiting_for_input = True
+        self.set_input_enabled(False)
+    
+    def _on_form_submitted(self, values: dict) -> None:
+        """Handle form submission."""
+        self._is_waiting_for_input = False
+        self.set_input_enabled(True)
+        
+        # Format the response clearly for the agent display (optional log)
+        formatted_kv = ", ".join([f"{k}: {v}" for k, v in values.items()])
+        response_text = f"User Input: {formatted_kv}"
+        
+        # Display as a user message locally for history context
+        self.append_message("User", response_text)
+        
+        # Instead of sending a fresh message, we submit input to the VM to resume the agent
+        if hasattr(self, '_current_chat_vm'):
+            self._current_chat_vm.submit_user_input(values)
+    
     def set_input_enabled(self, enabled: bool) -> None:
         """Enable or disable chat input and buttons."""
+        if self._is_waiting_for_input:
+            # Force disabled if waiting for input form
+            enabled = False
+            
         self._input.setEnabled(enabled)
         self._send_btn.setEnabled(enabled)
         self._new_chat_btn.setEnabled(enabled)
-        if enabled:
+        
+        if self._is_waiting_for_input:
+            self._input.setPlaceholderText("위에 있는 폼을 입력해 주세요...")
+        elif enabled:
             self._input.setPlaceholderText("메시지를 입력하세요...")
         else:
             self._input.setPlaceholderText("AI가 응답 중입니다...")

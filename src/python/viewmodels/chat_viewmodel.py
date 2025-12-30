@@ -1,9 +1,11 @@
+import json
 from PySide6.QtCore import QObject, Signal, QThread
-from typing import List, Optional, TYPE_CHECKING
+from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 
 from config import Config
 from agent import create_agent, set_pipeline_viewmodel
+from langgraph.types import Command
 
 if TYPE_CHECKING:
     from viewmodels.pipeline_viewmodel import PipelineViewModel
@@ -33,23 +35,63 @@ class StreamingAgentWorker(QThread):
     
     token_received = Signal(str)
     tool_activity = Signal(str, str)  # tool_name, result
-    finished = Signal(bool)
+    input_requested = Signal(str, list)  # description, fields
+    finished = Signal(dict) # state updates
     error = Signal(str)
     
-    def __init__(self, agent, messages: List[BaseMessage], parent=None):
+    def __init__(self, agent, input_data: Any, config: Dict[str, Any], parent=None):
         super().__init__(parent)
         self._agent = agent
-        self._messages = messages
+        self._input_data = input_data
+        self._config = config
     
     def run(self):
         try:
-            is_blocked = False
+            # Check if input is a Command object (for resumption) or standard messages
+            if isinstance(self._input_data, Command):
+                input_payload = self._input_data
+            else:
+                input_payload = {
+                    "messages": self._input_data, 
+                    "pipeline_context": {}, 
+                    "blocked": False,
+                    "waiting_for_input": False,
+                    "input_fields": []
+                }
+            
+            # Initialize a default state to avoid reference errors
+            state = {"waiting_for_input": False, "input_fields": []}
+            interrupt_handled = False
+            
             for mode, event in self._agent.stream(
-                {"messages": self._messages, "pipeline_context": {}, "blocked": False},
-                stream_mode=["messages", "values"]
+                input_payload,
+                config=self._config,
+                stream_mode=["messages", "updates"]
             ):
-                if mode == "values":
-                    is_blocked = event.get("blocked", False)
+                if mode == "updates":
+                    # Check for interruption
+                    if event.get("__interrupt__"):
+                        interrupt_obj = event.get("__interrupt__")[0]
+                        
+                        # In some versions/contexts, this might be an Interrupt object wrapper
+                        if hasattr(interrupt_obj, "value"):
+                            interrupt_value = interrupt_obj.value
+                        else:
+                            interrupt_value = interrupt_obj
+                            
+                        # Our tool returns {description, fields}
+                        description = interrupt_value.get("description", "")
+                        fields = interrupt_value.get("fields", [])
+                        state["waiting_for_input"] = True
+                        state["waiting_for_input"] = True
+                        state["input_fields"] = fields
+                        self.input_requested.emit(description, fields)
+                        interrupt_handled = True
+                    
+                    # If it's a regular update, we might want to capture state changes
+                    # But for now, we rely on the final snapshot or specific fields
+                    if isinstance(event, dict):
+                         state.update(event)
                     continue
                 
                 message, metadata = event
@@ -73,8 +115,29 @@ class StreamingAgentWorker(QThread):
                 elif isinstance(message, ToolMessage):
                     result_preview = message.content[:100] if len(message.content) > 100 else message.content
                     self.tool_activity.emit(message.name, result_preview)
+                    
             
-            self.finished.emit(is_blocked)
+            
+            # Check final state for any remaining interruption needed via snapshot
+            # This is a fallback in case the stream didn't yield the __interrupt__ event explicitly
+            if not interrupt_handled:
+                snapshot = self._agent.get_state(self._config)
+                if snapshot.tasks:
+                    for task in snapshot.tasks:
+                        if task.interrupts:
+                            interrupt_value = task.interrupts[0].value
+                            # Handle wrapped Interrupt object if valid
+                            if hasattr(interrupt_value, "value"):
+                                interrupt_value = interrupt_value.value
+                                
+                            description = interrupt_value.get("description", "")
+                            fields = interrupt_value.get("fields", [])
+                            state["waiting_for_input"] = True
+                            state["input_fields"] = fields
+                            self.input_requested.emit(description, fields)
+                            break
+            
+            self.finished.emit(state)
         except Exception as e:
             self.error.emit(str(e))
 
@@ -91,6 +154,7 @@ class ChatViewModel(QObject):
     agent_response = Signal(str)
     render_requested = Signal()
     tool_activity = Signal(str, str)  # tool_name, result
+    input_requested = Signal(str, list)  # description, fields
     conversation_cleared = Signal()
     
     def __init__(self, pipeline_vm: Optional["PipelineViewModel"] = None):
@@ -100,6 +164,8 @@ class ChatViewModel(QObject):
         self._pipeline_vm = pipeline_vm
         self._worker: Optional[StreamingAgentWorker] = None
         self._current_response = ""
+        self._waiting_for_input = False
+        self._thread_config = {"configurable": {"thread_id": "1"}}
         
         self._initialize_agent()
     
@@ -161,12 +227,51 @@ class ChatViewModel(QObject):
         self.streaming_started.emit()
         
         lc_messages = self._get_langchain_messages()
-        self._worker = StreamingAgentWorker(self._agent, lc_messages, self)
+        
+        # If we are resuming from input, we don't need to pass all messages again if using memory,
+        # but here we are stateless between runs unless we use the thread check.
+        # However, for simplicity with 'waiting_for_input' logic:
+        # If we are NOT waiting for input, we start fresh or append.
+        # If we ARE waiting for input, we should separate that logic (see submit_user_input).
+        
+        # This starting method is for NEW user messages.
+        self._waiting_for_input = False
+        
+        # This starting method is for NEW user messages.
+        self._waiting_for_input = False
+        
+        self._worker = StreamingAgentWorker(self._agent, lc_messages, self._thread_config, parent=self)
         self._worker.token_received.connect(self._on_token_received)
         self._worker.tool_activity.connect(self._on_tool_activity)
+        self._worker.input_requested.connect(self._on_input_requested)
         self._worker.finished.connect(self._on_streaming_finished)
         self._worker.error.connect(self._on_agent_error)
         self._worker.start()
+
+    def submit_user_input(self, values: dict) -> None:
+        """Submit user input as a tool result to resume the agent."""
+        if not self._agent:
+            return
+            
+        self.agent_thinking.emit()
+        self._waiting_for_input = False
+        self.streaming_started.emit()
+        
+        # Resume execution with the user's input
+        # We pass Command(resume=values) which will be the return value of interrupt() in the tool.
+        
+        # Now run again to continue execution
+        # We pass Command object as input to resume
+        self._worker = StreamingAgentWorker(self._agent, Command(resume=values), self._thread_config, parent=self)
+        self._worker.token_received.connect(self._on_token_received)
+        self._worker.tool_activity.connect(self._on_tool_activity)
+        self._worker.input_requested.connect(self._on_input_requested)
+        self._worker.finished.connect(self._on_streaming_finished)
+        self._worker.error.connect(self._on_agent_error)
+        self._worker.start()
+    
+    def _on_input_requested(self, description: str, fields: list) -> None:
+        self.input_requested.emit(description, fields)
     
     def _on_token_received(self, token: str) -> None:
         self._current_response += token
@@ -175,7 +280,8 @@ class ChatViewModel(QObject):
     def _on_tool_activity(self, tool_name: str, result: str) -> None:
         self.tool_activity.emit(tool_name, result)
     
-    def _on_streaming_finished(self, is_blocked: bool) -> None:
+    def _on_streaming_finished(self, state: dict) -> None:
+        is_blocked = state.get("blocked", False)
         if self._current_response:
             if is_blocked:
                 if self._messages and self._messages[-1].sender == "User":
@@ -184,6 +290,9 @@ class ChatViewModel(QObject):
                 msg = ChatMessage("Agent", self._current_response)
                 self._messages.append(msg)
             self.agent_response.emit(self._current_response)
+        
+        self._waiting_for_input = state.get("waiting_for_input", False)
+        self._input_fields = state.get("input_fields", [])
         
         self.streaming_finished.emit()
         self.render_requested.emit()

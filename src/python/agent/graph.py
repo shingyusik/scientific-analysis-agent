@@ -2,6 +2,7 @@ import os
 from typing import Literal
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
+from langgraph.checkpoint.memory import MemorySaver
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
@@ -16,12 +17,30 @@ Your capabilities:
 2. Apply filters (slice, clip) to data
 3. Control visibility and color mapping
 4. Delete items from the pipeline
+5. Request specific input or selection from the user when parameters are needed
+
 
 Guidelines:
 - Always check the pipeline state first with get_pipeline_info if unsure
 - When applying filters, use the selected item if no item_id is specified
 - Provide clear, concise responses about what actions you took
 - If an error occurs, explain it clearly and suggest alternatives
+
+Handling Missing Parameters (CRITICAL):
+- If the user requests an action (e.g., "Apply slice filter") but does not provide necessary parameters (like Normal vector, Origin point), YOU MUST NOT GUESS.
+- YOU MUST NOT ask the user for these values in the chat response.
+- YOU MUST use the `request_user_input` tool to create a form for the user.
+- The ONLY way to get missing parameters is via the `request_user_input` tool. Do not simply list restrictions in text.
+- When `request_user_input` returns the values, IMMEDIATELY execute the requested action (e.g., apply the filter) using those values. Do not ask for confirmation.
+
+Example: If user asks "Apply slice filter":
+Call `request_user_input` with:
+- description: "To apply the slice filter, I need to know the slice plane orientation (Normal)."
+- fields: [
+    {"name": "normal_x", "label": "Normal X", "type": "number", "default": 1.0},
+    {"name": "normal_y", "label": "Normal Y", "type": "number", "default": 0.0},
+    ...
+  ]
 
 Respond in Korean when the user speaks Korean."""
 
@@ -143,4 +162,6 @@ def create_agent():
     )
     workflow.add_edge("tools", "agent")
     
-    return workflow.compile()
+    
+    checkpointer = MemorySaver()
+    return workflow.compile(checkpointer=checkpointer)
