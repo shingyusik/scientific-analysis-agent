@@ -9,9 +9,7 @@
 - [ ] sequential thinking
 - [ ] 카메라 뷰 조정 툴
 - [ ] 백그라운드 색 툴
-- [ ] representation 툴
 - [ ] time 스텝 옮기기 툴 (재생, 앞/뒤로가기, 맨 앞/뒤로가기, 특정 step으로 가기)
-- [ ] coloring range 조정 툴
 - [ ] 이미지 input
-- [ ] 툴 input 더 상세히
 - [ ] context window 남은 양 확인 바
+- [ ] 레전드 세팅 툴
