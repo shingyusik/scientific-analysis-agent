@@ -20,6 +20,11 @@ class VTKViewModel(QObject):
     scalar_bar_hide_requested = Signal()
     legend_settings_changed = Signal(dict)  # legend settings dictionary
     
+    # Camera controls
+    camera_query_requested = Signal()
+    camera_state_changed = Signal(dict)
+    camera_apply_requested = Signal(dict)
+    
     BACKGROUND_PRESETS = [
         ("Warm Gray (Default)", (0.32, 0.34, 0.43), None),
         ("Blue Gray", (0.2, 0.3, 0.4), None),
@@ -108,6 +113,19 @@ class VTKViewModel(QObject):
     def set_legend_settings(self, settings: dict) -> None:
         """Request legend settings update."""
         self.legend_settings_changed.emit(settings)
+        self.render_requested.emit()
+    
+    def request_camera_query(self) -> None:
+        """Request current camera state."""
+        self.camera_query_requested.emit()
+    
+    def notify_camera_state(self, state: dict) -> None:
+        """Notify that camera state has been retrieved."""
+        self.camera_state_changed.emit(state)
+        
+    def request_camera_apply(self, state: dict) -> None:
+        """Request to apply new camera settings."""
+        self.camera_apply_requested.emit(state)
         self.render_requested.emit()
     
     def get_representation_style(self, actor: Any) -> str:

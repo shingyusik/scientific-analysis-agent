@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
                                QMenu, QToolButton, QFileDialog, QMessageBox, QToolBar,
-                               QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox)
+                               QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox, QLabel)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 
@@ -50,6 +50,73 @@ class ScalarRangeDialog(QDialog):
     def get_values(self):
         """Get the entered min and max values."""
         return self.min_spinbox.value(), self.max_spinbox.value()
+
+
+class CameraViewDialog(QDialog):
+    """Dialog for manual camera adjustment."""
+    
+    def __init__(self, parent=None, initial_state: dict = None):
+        super().__init__(parent)
+        self.setWindowTitle("Camera View Settings")
+        self.setModal(False)  # Allow live updates if we want, but let's stick to Apply/OK for now
+        
+        layout = QFormLayout(self)
+        
+        self.pos_x = self._create_spinbox(initial_state.get("position", [0, 0, 0])[0])
+        self.pos_y = self._create_spinbox(initial_state.get("position", [0, 0, 0])[1])
+        self.pos_z = self._create_spinbox(initial_state.get("position", [0, 0, 0])[2])
+        
+        self.focal_x = self._create_spinbox(initial_state.get("focal_point", [0, 0, 0])[0])
+        self.focal_y = self._create_spinbox(initial_state.get("focal_point", [0, 0, 0])[1])
+        self.focal_z = self._create_spinbox(initial_state.get("focal_point", [0, 0, 0])[2])
+        
+        self.up_x = self._create_spinbox(initial_state.get("view_up", [0, 0, 1])[0])
+        self.up_y = self._create_spinbox(initial_state.get("view_up", [0, 0, 1])[1])
+        self.up_z = self._create_spinbox(initial_state.get("view_up", [0, 0, 1])[2])
+        
+        self.zoom = self._create_spinbox(initial_state.get("zoom", 30))
+        
+        layout.addRow("Position X:", self.pos_x)
+        layout.addRow("Position Y:", self.pos_y)
+        layout.addRow("Position Z:", self.pos_z)
+        layout.addRow(QLabel("")) # Spacer
+        layout.addRow("Focal Point X:", self.focal_x)
+        layout.addRow("Focal Point Y:", self.focal_y)
+        layout.addRow("Focal Point Z:", self.focal_z)
+        layout.addRow(QLabel("")) # Spacer
+        layout.addRow("View Up X:", self.up_x)
+        layout.addRow("View Up Y:", self.up_y)
+        layout.addRow("View Up Z:", self.up_z)
+        layout.addRow(QLabel("")) # Spacer
+        layout.addRow("Zoom / Angle:", self.zoom)
+        
+        buttons = QDialogButtonBox(QDialogButtonBox.Apply | QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.button(QDialogButtonBox.Apply).clicked.connect(self.apply_clicked)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addRow(buttons)
+        
+        self.apply_requested = None # Placeholder for callback
+        
+    def _create_spinbox(self, value):
+        sb = QDoubleSpinBox()
+        sb.setRange(-1e10, 1e10)
+        sb.setValue(value)
+        sb.setDecimals(4)
+        sb.setSingleStep(0.1)
+        return sb
+        
+    def get_state(self):
+        return {
+            "position": [self.pos_x.value(), self.pos_y.value(), self.pos_z.value()],
+            "focal_point": [self.focal_x.value(), self.focal_y.value(), self.focal_z.value()],
+            "view_up": [self.up_x.value(), self.up_y.value(), self.up_z.value()],
+            "zoom": self.zoom.value()
+        }
+        
+    def apply_clicked(self):
+        if self.apply_requested:
+            self.apply_requested(self.get_state())
 
 
 class MainWindow(QMainWindow):
@@ -102,6 +169,9 @@ class MainWindow(QMainWindow):
     def _setup_toolbar(self) -> None:
         """Setup the toolbar."""
         toolbar = self.addToolBar("View Controls")
+        
+        action_camera = toolbar.addAction("Camera View")
+        action_camera.triggered.connect(self._on_camera_view)
         
         action_reset = toolbar.addAction("Home (Reset)")
         action_reset.triggered.connect(self._vtk_vm.reset_camera)
@@ -267,6 +337,10 @@ class MainWindow(QMainWindow):
         self._vtk_vm.view_plane_requested.connect(self._vtk_widget.set_view_plane)
         self._vtk_vm.plane_preview_requested.connect(self._vtk_widget.update_plane_preview)
         self._vtk_vm.plane_preview_hide_requested.connect(self._vtk_widget.hide_plane_preview)
+        self._vtk_vm.camera_query_requested.connect(
+            lambda: self._vtk_vm.notify_camera_state(self._vtk_widget.get_camera_state())
+        )
+        self._vtk_vm.camera_apply_requested.connect(self._vtk_widget.apply_camera_state)
         self._vtk_vm.scalar_bar_update_requested.connect(self._vtk_widget.update_scalar_bar)
         self._vtk_vm.scalar_bar_hide_requested.connect(self._vtk_widget.hide_scalar_bar)
         self._vtk_vm.legend_settings_changed.connect(self._vtk_widget.apply_legend_settings)
@@ -498,6 +572,17 @@ class MainWindow(QMainWindow):
             else:
                 self._vtk_vm.update_scalar_bar(selected.actor)
                 self._vtk_vm.request_render()
+    
+    def _on_camera_view(self) -> None:
+        """Handle camera view button click."""
+        # Query current state
+        state = self._vtk_widget.get_camera_state()
+        
+        dialog = CameraViewDialog(self, state)
+        dialog.apply_requested = lambda s: self._vtk_vm.request_camera_apply(s)
+        
+        if dialog.exec() == QDialog.Accepted:
+            self._vtk_vm.request_camera_apply(dialog.get_state())
     
     def _on_time_series_loaded(self, item) -> None:
         """Handle time series loaded."""

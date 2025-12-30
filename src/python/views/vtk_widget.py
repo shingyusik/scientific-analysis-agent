@@ -183,6 +183,43 @@ class VTKWidget(QWidget):
         camera.SetViewUp(0, 0, 1)
         self.renderer.ResetCamera()
         self.render()
+        
+    def get_camera_state(self) -> dict:
+        """Get current camera parameters."""
+        if not self.renderer:
+            return {}
+        camera = self.renderer.GetActiveCamera()
+        state = {
+            "position": list(camera.GetPosition()),
+            "focal_point": list(camera.GetFocalPoint()),
+            "view_up": list(camera.GetViewUp()),
+            "parallel_projection": bool(camera.GetParallelProjection())
+        }
+        if state["parallel_projection"]:
+            state["zoom"] = camera.GetParallelScale()
+        else:
+            state["zoom"] = camera.GetViewAngle()
+        return state
+        
+    def apply_camera_state(self, state: dict) -> None:
+        """Apply new camera parameters."""
+        if not self.renderer:
+            return
+        camera = self.renderer.GetActiveCamera()
+        if "position" in state:
+            camera.SetPosition(*state["position"])
+        if "focal_point" in state:
+            camera.SetFocalPoint(*state["focal_point"])
+        if "view_up" in state:
+            camera.SetViewUp(*state["view_up"])
+        if "parallel_projection" in state:
+            camera.SetParallelProjection(state["parallel_projection"])
+        if "zoom" in state:
+            if camera.GetParallelProjection():
+                camera.SetParallelScale(state["zoom"])
+            else:
+                camera.SetViewAngle(state["zoom"])
+        self.render()
     
     def set_view_xy(self) -> None:
         """Set XY plane view."""
