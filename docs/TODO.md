@@ -7,7 +7,6 @@
 - [ ] 이전 요청 수정 후 재요청
 - [ ] 난이도 측정 llm
 - [ ] sequential thinking
-- [ ] 사용자 요청 입력 및 선택 창 띄우기
 - [ ] 카메라 뷰 조정 툴
 - [ ] 백그라운드 색 툴
 - [ ] representation 툴
@@ -15,5 +14,4 @@
 - [ ] coloring range 조정 툴
 - [ ] 대화 중단 버튼
 - [ ] 이미지 input
-- [ ] 구조화된 출력 사용
 - [ ] 툴 input 더 상세히

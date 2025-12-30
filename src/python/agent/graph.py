@@ -8,6 +8,7 @@ from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 
 from agent.state import AgentState
 from agent.tools import get_all_tools
+from agent.models import GuardrailDecision
 from config import Config
 
 SYSTEM_PROMPT = """You are SA-Agent, a scientific analysis assistant for VTK visualization.
@@ -70,6 +71,9 @@ Respond with ONLY "allowed" or "blocked"."""
 
 
 def create_guardrail_node(model):
+    # Bind the model with structured output
+    structured_model = model.with_structured_output(GuardrailDecision)
+    
     def guardrail_node(state: AgentState) -> dict:
         messages = state["messages"]
         if not messages:
@@ -79,16 +83,19 @@ def create_guardrail_node(model):
         if not isinstance(last_message, HumanMessage):
             return {"blocked": False}
         
-        response = model.invoke([
+        # Invoke the structured model
+        decision: GuardrailDecision = structured_model.invoke([
             SystemMessage(content=GUARDRAIL_PROMPT),
             HumanMessage(content=f"User message: {last_message.content}")
         ])
         
-        if "blocked" in response.content.lower():
-            block_response = AIMessage(
-                content="죄송합니다. 이 요청은 과학 시각화 분석과 관련이 없어 처리할 수 없습니다. "
-                        "VTK 데이터 시각화, 필터 적용, 파이프라인 조작 등에 관해 질문해 주세요."
+        if decision.decision == "blocked":
+            response_content = (
+                "죄송합니다. 이 요청은 과학 시각화 분석과 관련이 없어 처리할 수 없습니다. "
+                "VTK 데이터 시각화, 필터 적용, 파이프라인 조작 등에 관해 질문해 주세요.\n\n"
+                f"(Reason: {decision.reason})"
             )
+            block_response = AIMessage(content=response_content)
             return {"messages": [block_response], "blocked": True}
         
         return {"blocked": False}

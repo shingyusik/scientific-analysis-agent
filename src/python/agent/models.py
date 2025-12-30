@@ -28,3 +28,13 @@ class InputRequest(BaseModel):
                 ]
             }
         }
+
+
+class GuardrailDecision(BaseModel):
+    """Decision model for the guardrail."""
+    decision: Literal["allowed", "blocked"] = Field(
+        description="Whether the user request is allowed or blocked based on the policy."
+    )
+    reason: str = Field(
+        description="The reason for the decision, explaining which policy guideline was applied."
+    )
