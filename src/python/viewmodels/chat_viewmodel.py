@@ -44,6 +44,10 @@ class StreamingAgentWorker(QThread):
         self._agent = agent
         self._input_data = input_data
         self._config = config
+        self._stop_requested = False
+    
+    def stop(self):
+        self._stop_requested = True
     
     def run(self):
         try:
@@ -68,6 +72,8 @@ class StreamingAgentWorker(QThread):
                 config=self._config,
                 stream_mode=["messages", "updates"]
             ):
+                if self._stop_requested:
+                    break
                 if mode == "updates":
                     # Check for interruption
                     if event.get("__interrupt__"):
@@ -312,6 +318,54 @@ class ChatViewModel(QObject):
     def _cleanup_worker(self) -> None:
         if self._worker:
             self._worker.deleteLater()
+            self._worker = None
+    
+    def stop_generation(self) -> None:
+        """Stop the agent execution thread."""
+        if self._worker and self._worker.isRunning():
+            # Set stop flag to exit the worker loop gracefully
+            self._worker.stop()
+            
+            # Capture worker to a local variable for safe cleanup
+            worker = self._worker
+            
+            # Disconnect signals to avoid further updates to this viewmodel
+            try:
+                worker.token_received.disconnect(self._on_token_received)
+                worker.tool_activity.disconnect(self._on_tool_activity)
+                worker.input_requested.disconnect(self._on_input_requested)
+                worker.finished.disconnect(self._on_streaming_finished)
+                worker.error.disconnect(self._on_agent_error)
+            except (RuntimeError, TypeError):
+                # Signals might already be disconnected
+                pass
+            
+            # Save the current response as a message before clearing
+            if self._current_response:
+                msg = ChatMessage("Agent", self._current_response)
+                self._messages.append(msg)
+                self.agent_response.emit(self._current_response)
+                self._current_response = ""
+            
+            # Immediately notify UI that streaming has "finished"
+            self.streaming_finished.emit()
+            
+            # Allow the worker to clean itself up when it finally terminates
+            worker.finished.connect(worker.deleteLater)
+            
+            # We keep a reference in a dedicated list to prevent GC while the thread is running
+            if not hasattr(self, '_stopping_workers'):
+                self._stopping_workers = []
+            self._stopping_workers.append(worker)
+            
+            # Helper to remove from list when officially done
+            def finalize_cleanup(w=worker):
+                if hasattr(self, '_stopping_workers') and w in self._stopping_workers:
+                    self._stopping_workers.remove(w)
+            
+            worker.finished.connect(finalize_cleanup)
+            
+            # Clear main reference to allow a new message to be sent
             self._worker = None
     
     def initialize_with_engine_message(self, message: str) -> None:

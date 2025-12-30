@@ -401,6 +401,7 @@ class ChatPanel(QWidget):
     
     message_sent = Signal(str)
     new_conversation_requested = Signal()
+    cancel_requested = Signal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -430,6 +431,30 @@ class ChatPanel(QWidget):
         self._scroll_area.setWidget(self._messages_container)
         layout.addWidget(self._scroll_area)
         
+        # Button bar layout
+        button_container = QWidget()
+        button_layout = QHBoxLayout(button_container)
+        button_layout.setContentsMargins(8, 8, 8, 0)
+        button_layout.setSpacing(8)
+        
+        self._send_btn = QPushButton("Send")
+        self._send_btn.clicked.connect(self._on_send)
+        button_layout.addWidget(self._send_btn)
+        
+        self._cancel_btn = QPushButton("Cancel")
+        self._cancel_btn.setEnabled(False)
+        self._cancel_btn.clicked.connect(self.cancel_requested.emit)
+        button_layout.addWidget(self._cancel_btn)
+        
+        self._new_chat_btn = QPushButton("New")
+        self._new_chat_btn.setToolTip("새 대화 시작")
+        self._new_chat_btn.clicked.connect(self._on_new_conversation)
+        button_layout.addWidget(self._new_chat_btn)
+        
+        button_layout.addStretch()
+        layout.addWidget(button_container)
+
+        # Input layout
         input_container = QWidget()
         input_layout = QHBoxLayout(input_container)
         input_layout.setContentsMargins(8, 8, 8, 8)
@@ -439,15 +464,6 @@ class ChatPanel(QWidget):
         self._input.setPlaceholderText("메시지를 입력하세요...")
         self._input.returnPressed.connect(self._on_send)
         input_layout.addWidget(self._input)
-        
-        self._send_btn = QPushButton("Send")
-        self._send_btn.clicked.connect(self._on_send)
-        input_layout.addWidget(self._send_btn)
-        
-        self._new_chat_btn = QPushButton("New")
-        self._new_chat_btn.setToolTip("새 대화 시작")
-        self._new_chat_btn.clicked.connect(self._on_new_conversation)
-        input_layout.addWidget(self._new_chat_btn)
         
         layout.addWidget(input_container)
     
@@ -486,6 +502,7 @@ class ChatPanel(QWidget):
             
         self._input.setEnabled(enabled)
         self._send_btn.setEnabled(enabled)
+        self._cancel_btn.setEnabled(not enabled and not self._is_waiting_for_input)
         self._new_chat_btn.setEnabled(enabled)
         
         if self._is_waiting_for_input:

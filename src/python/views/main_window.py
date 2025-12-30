@@ -240,6 +240,7 @@ class MainWindow(QMainWindow):
         
         self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
         self._chat_panel.new_conversation_requested.connect(self._chat_vm.start_new_conversation)
+        self._chat_panel.cancel_requested.connect(self._chat_vm.stop_generation)
         self._chat_vm.message_added.connect(
             lambda msg: self._chat_panel.append_message(msg.sender, msg.content)
         )
