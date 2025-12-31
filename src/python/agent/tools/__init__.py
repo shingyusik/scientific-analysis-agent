@@ -1,4 +1,4 @@
-from agent.tools.context import set_pipeline_viewmodel, get_pipeline_viewmodel
+from agent.tools.context import set_pipeline_viewmodel, get_pipeline_viewmodel, set_vtk_viewmodel, get_vtk_viewmodel
 from agent.tools.pipeline import get_pipeline_info, select_pipeline_item, delete_item
 from agent.tools.filter import (
     apply_slice_filter,
@@ -15,6 +15,9 @@ from agent.tools.visualization import (
     set_visual_property,
     auto_fit_scalar_range,
     set_scalar_range,
+    set_camera_view,
+    set_view_plane,
+    reset_camera_view,
 )
 from agent.tools.interaction import request_user_input
 
@@ -31,6 +34,9 @@ def get_all_tools() -> list:
         set_visual_property,
         auto_fit_scalar_range,
         set_scalar_range,
+        set_camera_view,
+        set_view_plane,
+        reset_camera_view,
         delete_item,
         get_filter_params,
         update_slice_filter_params,
@@ -41,6 +47,8 @@ def get_all_tools() -> list:
 __all__ = [
     "set_pipeline_viewmodel",
     "get_pipeline_viewmodel",
+    "set_vtk_viewmodel",
+    "get_vtk_viewmodel",
     "get_pipeline_info",
     "select_pipeline_item",
     "delete_item",
@@ -56,6 +64,9 @@ __all__ = [
     "set_visual_property",
     "auto_fit_scalar_range",
     "set_scalar_range",
+    "set_camera_view",
+    "set_view_plane",
+    "reset_camera_view",
     "request_user_input",
     "get_all_tools",
 ]

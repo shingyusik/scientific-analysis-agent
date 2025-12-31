@@ -22,7 +22,7 @@ def main():
     
     pipeline_vm = PipelineViewModel(render_service, file_loader)
     vtk_vm = VTKViewModel(render_service)
-    chat_vm = ChatViewModel(pipeline_vm)
+    chat_vm = ChatViewModel(pipeline_vm, vtk_vm)
     
     window = MainWindow(pipeline_vm, vtk_vm, chat_vm)
     window.show()

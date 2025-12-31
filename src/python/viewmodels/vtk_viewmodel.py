@@ -123,8 +123,8 @@ class VTKViewModel(QObject):
         """Notify that camera state has been retrieved."""
         self.camera_state_changed.emit(state)
         
-    def request_camera_apply(self, state: dict) -> None:
-        """Request to apply new camera settings."""
+    def apply_camera_state(self, state: dict) -> None:
+        """Apply new camera settings (position, focal_point, view_up, zoom)."""
         self.camera_apply_requested.emit(state)
         self.render_requested.emit()
     

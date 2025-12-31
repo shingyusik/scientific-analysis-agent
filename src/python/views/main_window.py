@@ -579,10 +579,10 @@ class MainWindow(QMainWindow):
         state = self._vtk_widget.get_camera_state()
         
         dialog = CameraViewDialog(self, state)
-        dialog.apply_requested = lambda s: self._vtk_vm.request_camera_apply(s)
+        dialog.apply_requested = lambda s: self._vtk_vm.apply_camera_state(s)
         
         if dialog.exec() == QDialog.Accepted:
-            self._vtk_vm.request_camera_apply(dialog.get_state())
+            self._vtk_vm.apply_camera_state(dialog.get_state())
     
     def _on_time_series_loaded(self, item) -> None:
         """Handle time series loaded."""

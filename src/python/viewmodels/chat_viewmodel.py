@@ -4,11 +4,12 @@ from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 
 from config import Config
-from agent import create_agent, set_pipeline_viewmodel
+from agent import create_agent, set_pipeline_viewmodel, set_vtk_viewmodel
 from langgraph.types import Command
 
 if TYPE_CHECKING:
     from viewmodels.pipeline_viewmodel import PipelineViewModel
+    from viewmodels.vtk_viewmodel import VTKViewModel
 
 
 class ChatMessage:
@@ -163,11 +164,13 @@ class ChatViewModel(QObject):
     input_requested = Signal(str, list)  # description, fields
     conversation_cleared = Signal()
     
-    def __init__(self, pipeline_vm: Optional["PipelineViewModel"] = None):
+    def __init__(self, pipeline_vm: Optional["PipelineViewModel"] = None, 
+                 vtk_vm: Optional["VTKViewModel"] = None):
         super().__init__()
         self._messages: List[ChatMessage] = []
         self._agent = None
         self._pipeline_vm = pipeline_vm
+        self._vtk_vm = vtk_vm
         self._worker: Optional[StreamingAgentWorker] = None
         self._current_response = ""
         self._waiting_for_input = False
@@ -178,9 +181,15 @@ class ChatViewModel(QObject):
     def _initialize_agent(self) -> None:
         if self._pipeline_vm:
             set_pipeline_viewmodel(self._pipeline_vm)
+        if self._vtk_vm:
+            set_vtk_viewmodel(self._vtk_vm)
         
         if Config.is_configured():
             self._agent = create_agent()
+    
+    def set_vtk_viewmodel(self, vm: "VTKViewModel") -> None:
+        self._vtk_vm = vm
+        set_vtk_viewmodel(vm)
     
     def set_pipeline_viewmodel(self, vm: "PipelineViewModel") -> None:
         self._pipeline_vm = vm
