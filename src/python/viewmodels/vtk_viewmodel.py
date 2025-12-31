@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer
 from typing import Tuple, List, Any, Optional
 from services.vtk_render_service import VTKRenderService
 
@@ -42,6 +42,7 @@ class VTKViewModel(QObject):
         super().__init__()
         self._render_service = render_service
         self._current_background = self.BACKGROUND_PRESETS[0]
+        self._last_camera_state = {}
     
     @property
     def render_service(self) -> VTKRenderService:
@@ -121,8 +122,38 @@ class VTKViewModel(QObject):
     
     def notify_camera_state(self, state: dict) -> None:
         """Notify that camera state has been retrieved."""
+        self._last_camera_state = state
         self.camera_state_changed.emit(state)
         
+    def get_camera_state_sync(self, timeout_ms: int = 1000) -> dict:
+        """Get the current camera state synchronously using a local event loop."""
+        loop = QEventLoop()
+        result_captured = [False]
+        state_data = {}
+
+        def on_state(state):
+            nonlocal state_data
+            state_data = state
+            result_captured[0] = True
+            loop.quit()
+
+        self.camera_state_changed.connect(on_state)
+        self.camera_query_requested.emit()
+        
+        # Use a timer for timeout
+        timer = QTimer()
+        timer.setSingleShot(True)
+        timer.timeout.connect(loop.quit)
+        timer.start(timeout_ms)
+
+        loop.exec()
+        
+        self.camera_state_changed.disconnect(on_state)
+        
+        if result_captured[0]:
+            return state_data
+        return self._last_camera_state  # Return cached state if timeout
+    
     def apply_camera_state(self, state: dict) -> None:
         """Apply new camera settings (position, focal_point, view_up, zoom)."""
         self.camera_apply_requested.emit(state)

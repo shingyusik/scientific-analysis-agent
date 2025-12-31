@@ -211,22 +211,11 @@ def get_camera_state() -> str:
     if not vm:
         return "Error: VTK Viewer not initialized"
     
-    # We need to get the state from the widget via the VM
-    # Since signals are asynchronous, this is tricky in a tool.
-    # However, the VM has access to the render_service which can talk to the widget if we expose it correctly,
-    # OR we can assume the VM can query it.
-    # In my implementation of main_window, the lambda connection handles this.
-    # For the tool, we'll wait for the signal or just use the service if it stores it.
-    
-    # Actually, VTKWidget.get_camera_state() is what we want.
-    # But tools run in the engine/agent side. 
-    # Let's check how other tools interact. 
-    # They mostly call VM methods that emit signals.
-    
-    # For GETTING state, we might need a way to block or just return the last known state.
-    # But wait, the user request was to "make it so llm can adjust camera view".
-    # SETTING is more important than GETTING for now.
-    return "Camera state query is not fully implemented for tools yet. Use 'set_camera_view' to adjust."
+    state = vm.get_camera_state_sync()
+    if not state:
+        return "Error: Could not retrieve camera state."
+        
+    return f"Current camera state: {state}"
 
 
 @tool
