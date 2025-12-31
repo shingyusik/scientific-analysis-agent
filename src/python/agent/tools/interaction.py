@@ -2,8 +2,12 @@ from typing import List, Dict, Any
 from langchain_core.tools import tool
 from langgraph.types import interrupt
 from agent.models import InputRequest
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("AgentTools")
 
 @tool(args_schema=InputRequest)
+@log_execution(start_msg="[Tool] 사용자 입력 요청", end_msg="[Tool] 사용자 입력 수신 완료")
 def request_user_input(
     description: str,
     fields: List[Dict[str, Any]]

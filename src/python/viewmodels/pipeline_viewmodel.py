@@ -4,6 +4,9 @@ from models.pipeline_item import PipelineItem
 from services.vtk_render_service import VTKRenderService
 from services.file_loader_service import FileLoaderService
 import filters
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("PipelineVM")
 
 
 class PipelineViewModel(QObject):
@@ -75,8 +78,10 @@ class PipelineViewModel(QObject):
         )
         self._items[item.id] = item
         self.item_added.emit(item)
+        logger.info(f"Source 추가됨: {name} ({item.id})")
         return item
     
+    @log_execution(start_msg="Cone Source 생성", end_msg="Cone Source 생성 완료")
     def create_cone_source(self) -> PipelineItem:
         """Create default cone source."""
         from models.pipeline_item import ColorByInfo
@@ -87,6 +92,7 @@ class PipelineViewModel(QObject):
         item = self.add_source("Cone Source", data, actor, "source", color_by=color_by)
         return item
     
+    @log_execution(start_msg="파일 로드 요청", end_msg="파일 로드 처리 완료")
     def load_file(self, file_path: str, check_time_series: bool = True) -> Optional[PipelineItem]:
         """Load a VTK file and add to pipeline."""
         try:
@@ -112,6 +118,7 @@ class PipelineViewModel(QObject):
             self.message.emit(f"Error loading file: {e}")
             return None
     
+    @log_execution(start_msg="시계열 파일 로드 요청", end_msg="시계열 파일 로드 완료")
     def load_time_series(self, file_paths: List[str]) -> Optional[PipelineItem]:
         """Load a time series of VTK files and add to pipeline."""
         try:
@@ -164,6 +171,7 @@ class PipelineViewModel(QObject):
         
         self.item_updated.emit(item)
     
+    @log_execution(start_msg="필터 적용 요청", end_msg="필터 적용 완료")
     def apply_filter(self, filter_type: str, parent_id: str, 
                      params: dict = None) -> Optional[PipelineItem]:
         """Apply a filter to a parent item using the filter registry."""
@@ -222,6 +230,7 @@ class PipelineViewModel(QObject):
         item.filter_params.update(params)
         self.item_updated.emit(item)
     
+    @log_execution(start_msg="필터 파라미터 확정(Commit)", end_msg="필터 파라미터 적용 완료")
     def commit_filter(self, item_id: str) -> None:
         """Apply filter changes using current parameters."""
         item = self._items.get(item_id)
@@ -244,6 +253,7 @@ class PipelineViewModel(QObject):
         self.message.emit("Filter applied.")
         self.item_updated.emit(item)
     
+    @log_execution(start_msg="아이템 삭제", end_msg="아이템 삭제 완료")
     def delete_item(self, item_id: str) -> None:
         """Delete item and its children from pipeline."""
         item = self._items.get(item_id)

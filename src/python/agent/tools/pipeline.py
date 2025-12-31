@@ -1,7 +1,11 @@
 from langchain_core.tools import tool
 from agent.tools.context import get_pipeline_viewmodel
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("AgentTools")
 
 @tool
+@log_execution(start_msg="[Tool] 파이프라인 정보 조회", end_msg="[Tool] 정보 조회 완료")
 def get_pipeline_info() -> str:
     """Get information about current loaded data and applied filters in the pipeline.
     Returns a summary of all items including their names, types, and visibility status.
@@ -32,6 +36,7 @@ def get_pipeline_info() -> str:
 
 
 @tool
+@log_execution(start_msg="[Tool] 아이템 선택", end_msg="[Tool] 선택 완료")
 def select_pipeline_item(item_id: str) -> str:
     """Select an item in the pipeline. This makes it the active item for subsequent filter applications.
     
@@ -51,6 +56,7 @@ def select_pipeline_item(item_id: str) -> str:
 
 
 @tool
+@log_execution(start_msg="[Tool] 아이템 삭제", end_msg="[Tool] 아이템 삭제 완료")
 def delete_item(item_id: str) -> str:
     """Delete an item from the pipeline. This will also delete all child items.
     

@@ -13,6 +13,11 @@ from viewmodels.chat_viewmodel import ChatViewModel
 from views.main_window import MainWindow
 
 
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("MainEntry")
+
+@log_execution(start_msg="애플리케이션 시작", end_msg="애플리케이션 종료")
 def main():
     app = QApplication(sys.argv)
     Config.load()

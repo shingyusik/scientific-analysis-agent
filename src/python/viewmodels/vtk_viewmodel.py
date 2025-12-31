@@ -1,6 +1,9 @@
 from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer
 from typing import Tuple, List, Any, Optional
 from services.vtk_render_service import VTKRenderService
+from utils.logger import get_logger
+
+logger = get_logger("VTKVM")
 
 
 class VTKViewModel(QObject):
@@ -52,7 +55,9 @@ class VTKViewModel(QObject):
                        color2: Tuple[float, float, float] = None) -> None:
         """Set background color."""
         self._current_background = ("Custom", color1, color2)
+        self._current_background = ("Custom", color1, color2)
         self.background_changed.emit(color1, color2)
+        logger.info(f"배경색 변경: Custom ({color1}, {color2})")
     
     def set_background_preset(self, preset_name: str) -> None:
         """Set background from preset."""
@@ -60,16 +65,19 @@ class VTKViewModel(QObject):
             if name == preset_name:
                 self._current_background = (name, c1, c2)
                 self.background_changed.emit(c1, c2)
+                logger.info(f"배경색 프리셋 변경: {preset_name}")
                 break
     
     def reset_camera(self) -> None:
         """Request camera reset."""
         self.camera_reset_requested.emit()
+        logger.info("카메라 리셋 요청")
     
     def set_view_plane(self, plane: str) -> None:
         """Request view plane change."""
         if plane in ("xy", "yz", "xz"):
             self.view_plane_requested.emit(plane)
+            logger.info(f"뷰 평면 변경 요청: {plane}")
     
     def add_actor(self, actor: Any) -> None:
         """Request actor to be added to renderer."""
@@ -158,6 +166,7 @@ class VTKViewModel(QObject):
         """Apply new camera settings (position, focal_point, view_up, zoom)."""
         self.camera_apply_requested.emit(state)
         self.render_requested.emit()
+        logger.info(f"카메라 상태 적용: {state}")
     
     def get_representation_style(self, actor: Any) -> str:
         """Get actor's current representation style."""

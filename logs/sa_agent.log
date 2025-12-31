@@ -1,0 +1,3 @@
+[2025-12-31 11:59:20] INFO     | TestIdentifier   | Application starting in test mode
+[2025-12-31 11:59:20] INFO     | TestIdentifier   | Doing some work inside function...
+[2025-12-31 11:59:20] INFO     | TestIdentifier   | Application finished

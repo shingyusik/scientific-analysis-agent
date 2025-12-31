@@ -5,6 +5,9 @@ from PySide6.QtCore import Signal
 from filters.filter_base import FilterBase
 from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("FilterOps")
 
 
 @dataclass
@@ -50,6 +53,7 @@ class ClipFilter(FilterBase):
     def params_class(self) -> type:
         return ClipParams
     
+    @log_execution(start_msg="Clip 필터 연산 시작", end_msg="Clip 필터 연산 완료")
     def apply_filter(self, data: Any, params: dict) -> Tuple[Any, Any]:
         """Apply clip filter."""
         import vtk

@@ -2,6 +2,9 @@ import vtk
 from vtk.util import numpy_support
 from typing import Any, Tuple, List
 import numpy as np
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("VTKRender")
 
 try:
     import sa_engine
@@ -20,6 +23,7 @@ class VTKRenderService:
     def engine(self):
         return self._engine
     
+    @log_execution(start_msg="Cone Source 생성 시작", end_msg="Cone Source 생성 완료")
     def create_cone_source(self) -> Tuple[Any, Any]:
         """Create a cone source with elevation scalars and vector field."""
         cone = vtk.vtkConeSource()
@@ -86,6 +90,7 @@ class VTKRenderService:
         
         return actor
     
+    @log_execution(start_msg="Contour 필터 적용", end_msg="Contour 필터 완료")
     def apply_contour(self, data: Any, value: float, array_name: str = None) -> Tuple[Any, Any]:
         """Apply contour filter."""
         contour = vtk.vtkContourFilter()
@@ -102,6 +107,7 @@ class VTKRenderService:
         
         return actor, contour_data
     
+    @log_execution(start_msg="Elevation 필터 적용", end_msg="Elevation 필터 완료")
     def apply_elevation(self, data: Any) -> Any:
         """Apply elevation filter."""
         bounds = data.GetBounds()
@@ -233,6 +239,8 @@ class VTKRenderService:
             lut.SetHueRange(0.6667, 0.0)
             lut.SetRange(rng[0], rng[1])
             lut.Modified()
+            
+        logger.info(f"Color By 설정: Array={actual_array_name}, Component={component}")
     
     def set_opacity(self, actor: Any, value: float) -> None:
         """Set actor opacity (0.0 - 1.0)."""
@@ -320,6 +328,7 @@ class VTKRenderService:
             lut.SetRange(rng[0], rng[1])
             lut.Modified()
         
+        logger.info(f"Scalar Range 자동 맞춤: {rng}")
         return True
     
     def set_custom_scalar_range(self, actor: Any, min_val: float, max_val: float) -> bool:

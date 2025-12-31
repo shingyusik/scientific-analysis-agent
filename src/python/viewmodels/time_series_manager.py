@@ -1,6 +1,9 @@
 from PySide6.QtCore import QObject, Signal, QTimer
 from typing import Optional
 from models.pipeline_item import PipelineItem
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("TimeSeriesMgr")
 
 
 class TimeSeriesManager(QObject):
@@ -58,12 +61,15 @@ class TimeSeriesManager(QObject):
     def has_time_series(self) -> bool:
         return self._current_item is not None and self._current_item.is_time_series
     
+    @log_execution(start_msg="타임 시리즈 아이템 설정", end_msg="타임 시리즈 아이템 설정 완료")
     def set_item(self, item: Optional[PipelineItem]) -> None:
         """Set the current item to control."""
         if self._is_playing:
             self.pause()
         
         self._current_item = item
+        if item:
+            logger.info(f"Time series item set: {item.name} (Max index: {item.max_time_index})")
     
     def set_loop_enabled(self, enabled: bool) -> None:
         """Enable or disable loop playback."""
@@ -75,6 +81,7 @@ class TimeSeriesManager(QObject):
         if self._is_playing:
             self._timer.setInterval(self._interval_ms)
     
+    @log_execution(start_msg="정재생 시작", end_msg="정재생 시작됨")
     def play_forward(self) -> None:
         """Start forward animation playback."""
         if not self.has_time_series:
@@ -95,6 +102,7 @@ class TimeSeriesManager(QObject):
         self._timer.start(self._interval_ms)
         self.animation_state_changed.emit(True, True)
     
+    @log_execution(start_msg="역재생 시작", end_msg="역재생 시작됨")
     def play_backward(self) -> None:
         """Start backward animation playback."""
         if not self.has_time_series:
@@ -115,6 +123,7 @@ class TimeSeriesManager(QObject):
         self._timer.start(self._interval_ms)
         self.animation_state_changed.emit(True, False)
     
+    @log_execution(start_msg="재생 일시정지", end_msg="재생 일시정지됨")
     def pause(self) -> None:
         """Pause animation playback."""
         if not self._is_playing:
@@ -174,6 +183,7 @@ class TimeSeriesManager(QObject):
         
         self.set_time_index(new_index)
     
+    @log_execution(level="DEBUG") # Frequent calls, use DEBUG
     def set_time_index(self, index: int) -> None:
         """Set specific time index."""
         if not self._current_item or not self._current_item.is_time_series:

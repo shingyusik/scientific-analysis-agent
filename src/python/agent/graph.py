@@ -10,6 +10,9 @@ from agent.state import AgentState
 from agent.tools import get_all_tools
 from agent.models import GuardrailDecision
 from config import Config
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("AgentGraph")
 
 SYSTEM_PROMPT = """You are SA-Agent, a scientific analysis assistant for VTK visualization.
 
@@ -89,6 +92,8 @@ def create_guardrail_node(model):
             HumanMessage(content=f"User message: {last_message.content}")
         ])
         
+        logger.debug(f"Guardrail decision: {decision.decision} (Reason: {decision.reason})")
+        
         if decision.decision == "blocked":
             response_content = (
                 "죄송합니다. 이 요청은 과학 시각화 분석과 관련이 없어 처리할 수 없습니다. "
@@ -126,7 +131,9 @@ def create_agent_node(model, tools: list):
         if not messages or messages[0].type != "system":
             messages = [SystemMessage(content=SYSTEM_PROMPT)] + list(messages)
         
+        logger.info("Agent Invocation Start")
         response = model_with_tools.invoke(messages)
+        logger.info("Agent Invocation End")
         return {"messages": [response]}
     
     return agent_node
@@ -171,4 +178,5 @@ def create_agent():
     
     
     checkpointer = MemorySaver()
+    logger.info("Agent Workflow Compiled")
     return workflow.compile(checkpointer=checkpointer)

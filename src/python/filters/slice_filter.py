@@ -7,6 +7,9 @@ from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox, OffsetListWidget
 import numpy as np
 import vtk
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("FilterOps")
 
 try:
     import sa_engine
@@ -65,6 +68,7 @@ class SliceFilter(FilterBase):
     def params_class(self) -> type:
         return SliceParams
     
+    @log_execution(start_msg="Slice 필터 연산 시작", end_msg="Slice 필터 연산 완료")
     def apply_filter(self, data: Any, params: dict) -> Tuple[Any, Any]:
         """Apply slice filter with multiple offsets."""
         slice_params = SliceParams.from_dict(params)

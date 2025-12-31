@@ -3,6 +3,9 @@ import re
 import glob
 import vtk
 from typing import Any, Tuple, List, Optional
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("FileLoader")
 
 
 class FileLoaderService:
@@ -10,6 +13,7 @@ class FileLoaderService:
     
     SUPPORTED_EXTENSIONS = {".vtu", ".vti", ".vtk"}
     
+    @log_execution(start_msg="파일 로드 시작", end_msg="파일 로드 완료")
     def load(self, file_path: str) -> Tuple[Any, str]:
         """
         Load a VTK data file.
@@ -111,6 +115,7 @@ class FileLoaderService:
         return [int(c) if c.isdigit() else c.lower() 
                 for c in re.split(r'(\d+)', filename)]
     
+    @log_execution(start_msg="시계열 데이터 로드 시작", end_msg="시계열 데이터 로드 완료")
     def load_time_series(self, file_paths: List[str]) -> Tuple[List[Any], str]:
         """
         Load all files in a time series.

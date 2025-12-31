@@ -6,6 +6,9 @@ from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, Bas
 from config import Config
 from agent import create_agent, set_pipeline_viewmodel, set_vtk_viewmodel
 from langgraph.types import Command
+from utils.logger import get_logger, log_execution
+
+logger = get_logger("ChatVM")
 
 if TYPE_CHECKING:
     from viewmodels.pipeline_viewmodel import PipelineViewModel
@@ -229,6 +232,7 @@ class ChatViewModel(QObject):
         
         self._process_with_agent()
     
+    @log_execution(start_msg="에이전트 처리 시작", end_msg="에이전트 처리 완료")
     def _process_with_agent(self) -> None:
         """Process message with LangGraph agent using streaming."""
         self.agent_thinking.emit()
@@ -314,6 +318,7 @@ class ChatViewModel(QObject):
         self._cleanup_worker()
     
     def _on_agent_error(self, error: str) -> None:
+        logger.error(f"Agent Error: {error}")
         self._add_agent_response(f"Error: {error}")
         self.streaming_finished.emit()
         self._cleanup_worker()
@@ -387,5 +392,6 @@ class ChatViewModel(QObject):
     
     def start_new_conversation(self) -> None:
         """Start a new conversation, clearing chat history only."""
+        logger.info("새 대화 시작 (History Clear)")
         self.clear_history()
         self.conversation_cleared.emit()
