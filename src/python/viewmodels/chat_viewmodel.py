@@ -4,7 +4,8 @@ from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, BaseMessage, ToolMessage
 
 from config import Config
-from agent import create_agent, set_pipeline_viewmodel, set_vtk_viewmodel
+from agent import create_agent
+from utils.app_context import set_pipeline_viewmodel, set_vtk_viewmodel
 from langgraph.types import Command
 from utils.logger import get_logger, log_execution
 
