@@ -220,6 +220,7 @@ class ChatViewModel(QObject):
         msg = ChatMessage("System", content)
         self._messages.append(msg)
         self.message_added.emit(msg)
+        logger.info(f"System Message Added: {content[:50]}...")
     
     def send_user_message(self, content: str) -> None:
         """Send a user message and trigger agent processing."""
@@ -229,6 +230,7 @@ class ChatViewModel(QObject):
         msg = ChatMessage("User", content)
         self._messages.append(msg)
         self.message_added.emit(msg)
+        logger.info(f"User Message Added: {content[:50]}...")
         
         self._process_with_agent()
     
@@ -239,11 +241,13 @@ class ChatViewModel(QObject):
         
         if not self._agent:
             response = "Agent not available. Please configure OPENAI_API_KEY."
+            logger.warning("Agent not available (OPENAI_API_KEY missing)")
             self._add_agent_response(response)
             return
         
         self._current_response = ""
         self.streaming_started.emit()
+        logger.info("Streaming started")
         
         lc_messages = self._get_langchain_messages()
         
@@ -300,6 +304,7 @@ class ChatViewModel(QObject):
         self.tool_activity.emit(tool_name, result)
     
     def _on_streaming_finished(self, state: dict) -> None:
+        logger.info(f"Streaming finished (Result length: {len(self._current_response)})")
         is_blocked = state.get("blocked", False)
         if self._current_response:
             if is_blocked:
@@ -336,6 +341,7 @@ class ChatViewModel(QObject):
     
     def stop_generation(self) -> None:
         """Stop the agent execution thread."""
+        logger.info("Stop generation requested")
         if self._worker and self._worker.isRunning():
             # Set stop flag to exit the worker loop gracefully
             self._worker.stop()
@@ -392,6 +398,6 @@ class ChatViewModel(QObject):
     
     def start_new_conversation(self) -> None:
         """Start a new conversation, clearing chat history only."""
-        logger.info("새 대화 시작 (History Clear)")
+        logger.info("Starting new conversation (History Clear)")
         self.clear_history()
         self.conversation_cleared.emit()
