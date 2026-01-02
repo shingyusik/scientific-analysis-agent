@@ -29,10 +29,12 @@ class FileLoaderService:
             ValueError: If file format is not supported
         """
         if not os.path.exists(file_path):
+            logger.error(f"File Load Error: File not found at {file_path}")
             raise FileNotFoundError(f"File not found: {file_path}")
         
         ext = os.path.splitext(file_path)[1].lower()
         if ext not in self.SUPPORTED_EXTENSIONS:
+            logger.error(f"File Load Error: Unsupported format {ext} for {file_path}")
             raise ValueError(f"Unsupported format: {ext}. Supported: {self.SUPPORTED_EXTENSIONS}")
         
         reader = self._get_reader(ext)

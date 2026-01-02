@@ -68,7 +68,7 @@ class VTKViewModel(QObject):
     
     def reset_camera(self) -> None:
         """Reset camera to default view."""
-        self._render_service.reset_camera()
+        # self._render_service.reset_camera() # Service does not handle camera
         logger.info("Camera Reset Requested")
         self.camera_reset_requested.emit()
     
@@ -164,10 +164,9 @@ class VTKViewModel(QObject):
     def apply_camera_state(self, state: dict) -> None:
         """Apply new camera settings (position, focal_point, view_up, zoom)."""
         self.camera_apply_requested.emit(state)
-        if self._render_service.apply_camera_state(state):
-            logger.info(f"Camera State Applied: {state}")
-            self.request_render()
-            return True
+        # Service does not handle camera directly, View handles it via signal
+        logger.info(f"Camera State Applied: {state}")
+        self.request_render()
     
     def get_representation_style(self, actor: Any) -> str:
         """Get actor's current representation style."""

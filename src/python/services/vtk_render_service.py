@@ -165,6 +165,8 @@ class VTKRenderService:
             prop.SetRepresentationToSurface()
             prop.EdgeVisibilityOn()
             prop.SetLineWidth(1.0)
+        
+        logger.info(f"Representation set to '{style}' for actor {id(actor)}")
     
     def get_representation_style(self, actor: Any) -> str:
         """Get actor's current representation style."""
@@ -261,18 +263,7 @@ class VTKRenderService:
         if hasattr(mapper, "SetScaleFactor"):
             mapper.SetScaleFactor(scale)
     
-    def get_data_info(self, data: Any) -> dict:
-        """Get data information using C++ engine if available."""
-        if self._engine:
-            return self._engine.get_data_info(data)
-        
-        info = {
-            "Number of Points": str(data.GetNumberOfPoints()),
-            "Number of Cells": str(data.GetNumberOfCells()),
-        }
-        bounds = data.GetBounds()
-        info["Bounds"] = f"X[{bounds[0]:.4g}, {bounds[1]:.4g}] Y[{bounds[2]:.4g}, {bounds[3]:.4g}] Z[{bounds[4]:.4g}, {bounds[5]:.4g}]"
-        return info
+
     
     def get_data_arrays(self, data: Any) -> List[Tuple[str, str, int]]:
         """Get list of available data arrays with component count."""
@@ -346,5 +337,11 @@ class VTKRenderService:
             lut.SetRange(min_val, max_val)
             lut.Modified()
         
+        if lut:
+            lut.SetHueRange(0.6667, 0.0)
+            lut.SetRange(min_val, max_val)
+            lut.Modified()
+        
+        logger.info(f"Custom Scalar Range Set: [{min_val}, {max_val}]")
         return True
 

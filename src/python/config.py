@@ -3,7 +3,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-from utils.logger import get_logger
+from utils.logger import get_logger, log_execution
 
 logger = get_logger("Config")
 
@@ -12,6 +12,7 @@ class Config:
     _loaded: bool = False
     
     @classmethod
+    @log_execution(start_msg="Loading Configuration", end_msg="Configuration Loaded")
     def load(cls) -> bool:
         project_root = Path(__file__).parent.parent.parent
         env_path = project_root / ".env"
