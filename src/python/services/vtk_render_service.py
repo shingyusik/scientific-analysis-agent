@@ -90,35 +90,7 @@ class VTKRenderService:
         
         return actor
     
-    @log_execution(start_msg="Contour Filter Started", end_msg="Contour Filter Applied")
-    def apply_contour(self, data: Any, value: float, array_name: str = None) -> Tuple[Any, Any]:
-        """Apply contour filter."""
-        contour = vtk.vtkContourFilter()
-        contour.SetInputData(data)
-        
-        if array_name:
-            contour.SelectInputScalars(array_name)
-        
-        contour.SetValue(0, value)
-        contour.Update()
-        
-        contour_data = contour.GetOutput()
-        actor = self.create_actor(contour_data)
-        
-        return actor, contour_data
-    
-    @log_execution(start_msg="Elevation Filter Started", end_msg="Elevation Filter Applied")
-    def apply_elevation(self, data: Any) -> Any:
-        """Apply elevation filter."""
-        bounds = data.GetBounds()
-        
-        elev = vtk.vtkElevationFilter()
-        elev.SetInputData(data)
-        elev.SetLowPoint(bounds[0], bounds[2], bounds[4])
-        elev.SetHighPoint(bounds[1], bounds[3], bounds[5])
-        elev.Update()
-        
-        return elev.GetOutput()
+
     
     def set_representation(self, actor: Any, style: str) -> None:
         """Set actor representation style."""
