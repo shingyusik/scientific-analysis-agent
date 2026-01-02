@@ -5,26 +5,7 @@ from utils.logger import get_logger, log_execution
 
 logger = get_logger("AgentTools")
 
-@tool
-@log_execution(start_msg="[Tool] Set Visibility", end_msg="[Tool] Visibility Set")
-def set_visibility(item_id: str, visible: bool) -> str:
-    """Set the visibility of an item in the pipeline.
-    
-    Args:
-        item_id: ID of the item to change visibility
-        visible: True to show, False to hide
-    """
-    vm = get_pipeline_viewmodel()
-    if not vm:
-        return "Error: Pipeline not initialized"
-    
-    item = vm.items.get(item_id)
-    if not item:
-        return f"Error: Item {item_id} not found"
-    
-    vm.set_visibility(item_id, visible)
-    status = "visible" if visible else "hidden"
-    return f"Set '{item.name}' to {status}"
+
 
 
 @tool

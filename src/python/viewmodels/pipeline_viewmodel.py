@@ -5,6 +5,7 @@ from services.vtk_render_service import VTKRenderService
 from services.file_loader_service import FileLoaderService
 import filters
 from utils.logger import get_logger, log_execution
+from utils.tool_registry import expose_tool
 
 logger = get_logger("PipelineVM")
 
@@ -58,10 +59,37 @@ class PipelineViewModel(QObject):
                 result.append((filter_type, filter_instance.display_name))
         return result
     
-    def select_item(self, item_id: Optional[str]) -> None:
+    @expose_tool(name="get_pipeline_info", description="Get a summary of the current visualization pipeline. Returns a list of all loaded items (sources, filters) with their IDs, types, visibility status, and data statistics (points, cells). Use this to understand what is currently loaded.")
+    def get_pipeline_info(self) -> str:
+        """Get information about pipeline items."""
+        if not self._items:
+            return "No items in pipeline. Load a file first."
+        
+        result = []
+        for item_id, item in self._items.items():
+            info = f"- {item.name} (type: {item.item_type}, id: {item_id}, visible: {item.visible})"
+            if item.parent_id:
+                info += f" [parent: {item.parent_id}]"
+            if item.vtk_data:
+                num_points = item.vtk_data.GetNumberOfPoints()
+                num_cells = item.vtk_data.GetNumberOfCells()
+                info += f" [points: {num_points}, cells: {num_cells}]"
+            result.append(info)
+        
+        selected = self.selected_item
+        selected_info = f"\nCurrently selected: {selected.name} ({selected.id})" if selected else "\nNo item selected"
+        
+        return "Pipeline items:\n" + "\n".join(result) + selected_info
+    
+    @expose_tool(name="select_pipeline_item", description="Select a specific item in the pipeline by its ID. It is crucial to select an item BEFORE applying a filter (like Slice or Clip) or changing visual properties (color, opacity). Returns the name and ID of the selected item.")
+    def select_item(self, item_id: Optional[str]) -> str:
         """Select a pipeline item."""
         self._selected_id = item_id
         self.selection_changed.emit(self.selected_item)
+        
+        if self.selected_item:
+            return f"Selected item: '{self.selected_item.name}' (id: {self.selected_item.id})"
+        return "Selection cleared."
     
     def add_source(self, name: str, vtk_data, actor, item_type: str = "source", 
                    parent_id: str = None, color_by: "ColorByInfo" = None) -> PipelineItem:
@@ -253,8 +281,9 @@ class PipelineViewModel(QObject):
         self.message.emit("Filter applied.")
         self.item_updated.emit(item)
     
+    @expose_tool(name="delete_item", description="Delete a specific item from the pipeline by its ID. WARNING: This will also recursively delete all child items (e.g., filters applied to this source). Use with caution.")
     @log_execution(start_msg="Deleting Item", end_msg="Item Deleted")
-    def delete_item(self, item_id: str) -> None:
+    def delete_item(self, item_id: str) -> str:
         """Delete item and its children from pipeline."""
         item = self._items.get(item_id)
         if not item:
@@ -274,14 +303,19 @@ class PipelineViewModel(QObject):
             self.selection_changed.emit(None)
         
         self.item_removed.emit(item_id)
+        return f"Deleted item {item_id} and its children."
     
-    def set_visibility(self, item_id: str, visible: bool) -> None:
+    @expose_tool(name="set_visibility", description="Show or hide an item in the 3D view. 'visible' should be True to show, False to hide. Helps in managing complex scenes by hiding unnecessary layers.")
+    def set_visibility(self, item_id: str, visible: bool) -> str:
         """Set item visibility."""
         item = self._items.get(item_id)
         if item and item.actor:
             item.visible = visible
             item.actor.SetVisibility(visible)
             self.item_updated.emit(item)
+            state = "visible" if visible else "hidden"
+            return f"Set '{item.name}' to {state}."
+        return f"Item {item_id} not found."
     
     def set_representation(self, item_id: str, style: str) -> None:
         """Set representation style for an item."""
