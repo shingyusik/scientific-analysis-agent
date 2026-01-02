@@ -167,6 +167,7 @@ class VTKRenderService:
         """Set coloring by scalar array. For vector arrays, can use magnitude or components (X, Y, Z)."""
         mapper = actor.GetMapper()
         if not mapper:
+            logger.warning("set_color_by: Actor has no mapper")
             return
         
         if array_name == "__SolidColor__":
@@ -176,10 +177,12 @@ class VTKRenderService:
         
         data = mapper.GetInput()
         if not data:
+            logger.warning("set_color_by: Mapper has no input data")
             return
         
         arr = self._get_data_object(data, array_type).GetArray(array_name)
         if not arr:
+            logger.warning(f"set_color_by: Array '{array_name}' not found in {array_type} data")
             return
         
         actual_array = arr
@@ -261,10 +264,12 @@ class VTKRenderService:
         """Set scalar range to data min/max values."""
         mapper = actor.GetMapper()
         if not mapper or not mapper.GetScalarVisibility():
+            logger.warning("fit_scalar_range: Mapper missing or scalar visibility off")
             return False
         
         data = mapper.GetInput()
         if not data:
+            logger.warning("fit_scalar_range: No input data")
             return False
         
         array_name = mapper.GetArrayName()
@@ -281,6 +286,7 @@ class VTKRenderService:
             scalars = data.GetPointData().GetScalars() or data.GetCellData().GetScalars()
         
         if not scalars:
+            logger.warning("fit_scalar_range: No scalars found to fit")
             return False
         
         rng = scalars.GetRange()
@@ -299,16 +305,12 @@ class VTKRenderService:
         """Set custom scalar range."""
         mapper = actor.GetMapper()
         if not mapper or not mapper.GetScalarVisibility():
+            logger.warning("set_custom_scalar_range: Mapper missing or scalar visibility off")
             return False
         
         mapper.SetScalarRange(min_val, max_val)
         
         lut = mapper.GetLookupTable()
-        if lut:
-            lut.SetHueRange(0.6667, 0.0)
-            lut.SetRange(min_val, max_val)
-            lut.Modified()
-        
         if lut:
             lut.SetHueRange(0.6667, 0.0)
             lut.SetRange(min_val, max_val)
