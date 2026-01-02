@@ -5,6 +5,9 @@ from PySide6.QtWidgets import QWidget
 from PySide6.QtCore import Signal
 from models.pipeline_item import PipelineItem
 from services.vtk_render_service import VTKRenderService
+from utils.logger import get_logger
+
+logger = get_logger("FilterBase")
 
 
 class FilterBase(ABC):
@@ -132,8 +135,9 @@ class FilterBase(ABC):
                         formatted_val = str(val)
                     result.append(f"  - {field.name}: {formatted_val}")
                 return "\n".join(result)
-            except Exception:
+            except Exception as e:
                 # Fallback to default formatting if something goes wrong
+                logger.warning(f"Failed to format params using dataclass: {e}")
                 pass
         
         result = []

@@ -201,5 +201,6 @@ class ClipFilter(FilterBase):
     def _emit_params_changed(self, item: PipelineItem) -> None:
         """Emit parameters changed via callback."""
         if hasattr(self, '_on_params_changed_callback') and self._on_params_changed_callback:
+            logger.debug(f"Clip parameters updated for {item.id}")
             self._on_params_changed_callback(item.id, item.filter_params)
 

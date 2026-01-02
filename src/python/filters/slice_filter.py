@@ -115,11 +115,13 @@ class SliceFilter(FilterBase):
         """Apply a single slice cut using C++ engine if available."""
         engine = sa_engine.Engine() if sa_engine else None
         if engine:
+            logger.debug("Applying slice using accelerated engine")
             return engine.apply_slice(
                 data, origin[0], origin[1], origin[2],
                 normal[0], normal[1], normal[2]
             )
         else:
+            logger.debug("Applying slice using VTK fallback")
             plane = vtk.vtkPlane()
             plane.SetOrigin(origin)
             plane.SetNormal(normal)
@@ -301,5 +303,6 @@ class SliceFilter(FilterBase):
     def _emit_params_changed(self, item: PipelineItem) -> None:
         """Emit parameters changed via callback."""
         if hasattr(self, '_on_params_changed_callback') and self._on_params_changed_callback:
+            logger.debug(f"Slice parameters updated for {item.id}")
             self._on_params_changed_callback(item.id, item.filter_params)
 
