@@ -74,12 +74,17 @@ class TimeSeriesManager(QObject):
     def set_loop_enabled(self, enabled: bool) -> None:
         """Enable or disable loop playback."""
         self._loop_enabled = enabled
+        logger.info(f"Loop playback enabled: {enabled}")
     
     def set_interval(self, interval_ms: int) -> None:
         """Set animation interval in milliseconds."""
+        old_interval = self._interval_ms
         self._interval_ms = max(10, interval_ms)
         if self._is_playing:
             self._timer.setInterval(self._interval_ms)
+        
+        if old_interval != self._interval_ms:
+            logger.info(f"Animation interval set to {self._interval_ms}ms")
     
     @log_execution(start_msg="Forward Play Started", end_msg="Forward Play activated")
     def play_forward(self) -> None:
