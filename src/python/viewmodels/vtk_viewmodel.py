@@ -67,7 +67,14 @@ class VTKViewModel(QObject):
                 logger.info(f"Background preset changed: {preset_name}")
                 break
     
-    @expose_tool(name="reset_camera_view", description="Reset the camera to a default isometric view ensuring all loaded data is visible.")
+    @expose_tool(
+        name="reset_camera_view",
+        description=(
+            "Resets the camera to a default isometric perspective.\n"
+            "Returns:\n"
+            "- A confirmation message."
+        )
+    )
     def reset_camera(self) -> str:
         """Reset camera to default view."""
         # self._render_service.reset_camera() # Service does not handle camera
@@ -75,7 +82,16 @@ class VTKViewModel(QObject):
         self.camera_reset_requested.emit()
         return "Camera reset to default view."
     
-    @expose_tool(name="set_view_plane", description="Set the camera to look along a specific axis plane. Options: 'xy' (Top), 'yz' (Right), 'xz' (Front).")
+    @expose_tool(
+        name="set_view_plane",
+        description=(
+            "Aligns the camera to look along a specific standard axis.\n"
+            "Parameters:\n"
+            "- plane: 'xy' (Top), 'yz' (Right), or 'xz' (Front).\n"
+            "Returns:\n"
+            "- A confirmation message."
+        )
+    )
     def set_view_plane(self, plane: str) -> str:
         """Request view plane change."""
         if plane in ("xy", "yz", "xz"):
@@ -172,7 +188,14 @@ class VTKViewModel(QObject):
             return state_data
         return self._last_camera_state  # Return cached state if timeout
 
-    @expose_tool(name="get_camera_state", description="Get current camera parameters including position, focal point, view up vector, and zoom level.")
+    @expose_tool(
+        name="get_camera_state",
+        description=(
+            "Retrieves the current camera parameters.\n"
+            "Returns:\n"
+            "- A dictionary string with keys: 'position', 'focal_point', 'view_up', 'zoom'."
+        )
+    )
     def get_camera_state_tool(self) -> str:
         """Expose get_camera_state as a tool that returns a string."""
         state = self.get_camera_state_sync()
@@ -180,7 +203,19 @@ class VTKViewModel(QObject):
             return "Could not retrieve camera state."
         return f"Current camera state: {state}"
     
-    @expose_tool(name="set_camera_view", description="Manually set camera parameters. Provide 'position' [x,y,z], 'focal_point' [x,y,z], 'view_up' [x,y,z], or 'zoom' (float).")
+    @expose_tool(
+        name="set_camera_view",
+        description=(
+            "Precisely sets the camera parameters.\n"
+            "Parameters:\n"
+            "- position: (Optional) [x, y, z] camera location.\n"
+            "- focal_point: (Optional) [x, y, z] look-at point.\n"
+            "- view_up: (Optional) [x, y, z] up vector.\n"
+            "- zoom: (Optional) Float zoom factor.\n"
+            "Returns:\n"
+            "- A confirmation message with the applied settings."
+        )
+    )
     def apply_camera_state_tool(self, position: Optional[List[float]] = None, 
                                focal_point: Optional[List[float]] = None,
                                view_up: Optional[List[float]] = None,

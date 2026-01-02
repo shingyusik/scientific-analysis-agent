@@ -2,6 +2,7 @@ from PySide6.QtCore import QObject, Signal, QTimer
 from typing import Optional
 from models.pipeline_item import PipelineItem
 from utils.logger import get_logger, log_execution
+from utils.tool_registry import expose_tool
 
 logger = get_logger("TimeSeriesMgr")
 
@@ -71,11 +72,31 @@ class TimeSeriesManager(QObject):
         if item:
             logger.info(f"Time series item set: {item.name} (Max index: {item.max_time_index})")
     
+    @expose_tool(
+        name="set_loop_playback",
+        description=(
+            "Enables or disables looping for time series playback.\n"
+            "Parameters:\n"
+            "- enabled: True to enable looping, False to disable.\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def set_loop_enabled(self, enabled: bool) -> None:
         """Enable or disable loop playback."""
         self._loop_enabled = enabled
         logger.info(f"Loop playback enabled: {enabled}")
     
+    @expose_tool(
+        name="set_playback_speed",
+        description=(
+            "Sets the animation speed.\n"
+            "Parameters:\n"
+            "- interval_ms: Delay between frames in milliseconds (min 10).\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def set_interval(self, interval_ms: int) -> None:
         """Set animation interval in milliseconds."""
         old_interval = self._interval_ms
@@ -86,6 +107,14 @@ class TimeSeriesManager(QObject):
         if old_interval != self._interval_ms:
             logger.info(f"Animation interval set to {self._interval_ms}ms")
     
+    @expose_tool(
+        name="play_animation",
+        description=(
+            "Starts playing the time series animation forwards.\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     @log_execution(start_msg="Forward Play Started", end_msg="Forward Play activated")
     def play_forward(self) -> None:
         """Start forward animation playback."""
@@ -128,6 +157,14 @@ class TimeSeriesManager(QObject):
         self._timer.start(self._interval_ms)
         self.animation_state_changed.emit(True, False)
     
+    @expose_tool(
+        name="pause_animation",
+        description=(
+            "Pauses the currently running animation.\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     @log_execution(start_msg="Playback Paused", end_msg="Playback Paused")
     def pause(self) -> None:
         """Pause animation playback."""
@@ -188,6 +225,16 @@ class TimeSeriesManager(QObject):
         
         self.set_time_index(new_index)
     
+    @expose_tool(
+        name="set_time_step",
+        description=(
+            "Jumps to a specific time step index.\n"
+            "Parameters:\n"
+            "- index: Integer time step index (0 to max_index).\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     @log_execution(level="DEBUG") # Frequent calls, use DEBUG
     def set_time_index(self, index: int) -> None:
         """Set specific time index."""

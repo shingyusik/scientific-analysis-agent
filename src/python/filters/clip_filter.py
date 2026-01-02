@@ -207,7 +207,19 @@ class ClipFilter(FilterBase):
             self._on_params_changed_callback(item.id, item.filter_params)
 
     @staticmethod
-    @expose_tool(name="apply_clip_filter", description="Apply a clip filter to remove part of the data on one side of a plane. Returns the new item ID.")
+    @expose_tool(
+        name="apply_clip_filter",
+        description=(
+            "Applies a Clip filter to the selected dataset. This removes all data on one side of a plane (defined by the normal). \n"
+            "Parameters:\n"
+            "- 'normal_x', 'normal_y', 'normal_z': The direction of the clipping plane normal. "
+            "Data on the side of the normal will be KEPT, and data on the opposite side REMOVED (or vice-versa depending on VTK convention, usually inside/outside).\n"
+            "- 'origin_x', 'origin_y', 'origin_z': A point on the clipping plane.\n"
+            "- 'show_plane': Show the plane widget.\n"
+            "- 'item_id': Target object ID.\n"
+            "Use this to reveal interior parts of a mesh by cutting away the exterior."
+        )
+    )
     def create_tool(
         normal_x: float = 1.0,
         normal_y: float = 0.0,
@@ -251,7 +263,18 @@ class ClipFilter(FilterBase):
         return "Error: Failed to apply clip filter"
 
     @staticmethod
-    @expose_tool(name="update_clip_filter_params", description="Update parameters of an existing clip filter.")
+    @expose_tool(
+        name="update_clip_filter_params",
+        description=(
+            "Updates the parameters of an existing Clip filter.\n"
+            "Parameters:\n"
+            "- 'item_id': The ID of the clip filter to update.\n"
+            "- 'origin_x/y/z': Move the clipping plane.\n"
+            "- 'normal_x/y/z': Rotate the clipping plane.\n"
+            "- 'show_plane': Toggle visibility.\n"
+            "- 'apply': Re-calculate immediate."
+        )
+    )
     def update_tool(
         item_id: Optional[str] = None,
         origin_x: Optional[float] = None,

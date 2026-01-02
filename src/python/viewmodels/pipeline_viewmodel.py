@@ -59,7 +59,14 @@ class PipelineViewModel(QObject):
                 result.append((filter_type, filter_instance.display_name))
         return result
     
-    @expose_tool(name="get_pipeline_info", description="Get a summary of the current visualization pipeline. Returns a list of all loaded items (sources, filters) with their IDs, types, visibility status, and data statistics (points, cells). Use this to understand what is currently loaded.")
+    @expose_tool(
+        name="get_pipeline_info",
+        description=(
+            "Retrieves a detailed summary of the current visualization pipeline.\n"
+            "Returns:\n"
+            "- A formatted string listing all loaded items (sources, filters) with their Names, IDs, Types, Visibility, and Data Statistics."
+        )
+    )
     def get_pipeline_info(self) -> str:
         """Get information about pipeline items."""
         if not self._items:
@@ -81,7 +88,16 @@ class PipelineViewModel(QObject):
         
         return "Pipeline items:\n" + "\n".join(result) + selected_info
     
-    @expose_tool(name="select_pipeline_item", description="Select a specific item in the pipeline by its ID. It is crucial to select an item BEFORE applying a filter (like Slice or Clip) or changing visual properties (color, opacity). Returns the name and ID of the selected item.")
+    @expose_tool(
+        name="select_pipeline_item",
+        description=(
+            "Selects a specific object in the pipeline by its unique ID.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item to select.\n"
+            "Returns:\n"
+            "- The name and ID of the newly selected item."
+        )
+    )
     def select_item(self, item_id: Optional[str]) -> str:
         """Select a pipeline item."""
         self._selected_id = item_id
@@ -281,7 +297,17 @@ class PipelineViewModel(QObject):
         self.message.emit("Filter applied.")
         self.item_updated.emit(item)
     
-    @expose_tool(name="delete_item", description="Delete a specific item from the pipeline by its ID. WARNING: This will also recursively delete all child items (e.g., filters applied to this source). Use with caution.")
+    @expose_tool(
+        name="delete_item",
+        description=(
+            "Permanently deletes a specific item from the pipeline.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item to delete.\n"
+            "Returns:\n"
+            "- A confirmation message.\n"
+            "WARNING: This is recursive and will delete all children (filters) of the item."
+        )
+    )
     @log_execution(start_msg="Deleting Item", end_msg="Item Deleted")
     def delete_item(self, item_id: str) -> str:
         """Delete item and its children from pipeline."""
@@ -305,7 +331,17 @@ class PipelineViewModel(QObject):
         self.item_removed.emit(item_id)
         return f"Deleted item {item_id} and its children."
     
-    @expose_tool(name="set_visibility", description="Show or hide an item in the 3D view. 'visible' should be True to show, False to hide. Helps in managing complex scenes by hiding unnecessary layers.")
+    @expose_tool(
+        name="set_visibility",
+        description=(
+            "Toggles the visibility of an object in the 3D viewport.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item.\n"
+            "- visible: True to show the item, False to hide it.\n"
+            "Returns:\n"
+            "- A status message indicating the new state."
+        )
+    )
     def set_visibility(self, item_id: str, visible: bool) -> str:
         """Set item visibility."""
         item = self._items.get(item_id)
@@ -317,7 +353,17 @@ class PipelineViewModel(QObject):
             return f"Set '{item.name}' to {state}."
         return f"Item {item_id} not found."
     
-    @expose_tool(name="set_representation", description="Change how the item is rendered. Options: 'Surface', 'Points', 'Wireframe', 'Surface With Edges'. Use 'Points' for large datasets, 'Wireframe' to see mesh structure.")
+    @expose_tool(
+        name="set_representation",
+        description=(
+            "Changes the rendering style of the object.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item.\n"
+            "- style: One of 'Surface', 'Wireframe', 'Points', 'Surface With Edges'.\n"
+            "Returns:\n"
+            "- A confirmation message."
+        )
+    )
     def set_representation(self, item_id: str, style: str) -> str:
         """Set representation style for an item."""
         item = self._items.get(item_id)
@@ -328,7 +374,19 @@ class PipelineViewModel(QObject):
             return f"Set '{item.name}' representation to '{style}'."
         return f"Item {item_id} not found."
     
-    @expose_tool(name="set_color_by", description="Color the item by a data array. array_name: Name of array or '__SolidColor__'. array_type: 'POINT' or 'CELL'. component: 'Magnitude', 'X', 'Y', 'Z' or empty string.")
+    @expose_tool(
+        name="set_color_by",
+        description=(
+            "Applies scalar coloring to the object based on a data array.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item.\n"
+            "- array_name: Name of the data array. Use '__SolidColor__' to reset.\n"
+            "- array_type: 'POINT' or 'CELL'.\n"
+            "- component: 'Magnitude' or vector component ('X', 'Y', 'Z').\n"
+            "Returns:\n"
+            "- A confirmation message."
+        )
+    )
     def set_color_by(self, item_id: str, array_name: str, array_type: str = 'POINT', component: str = '') -> str:
         """Set coloring by scalar array."""
         from models.pipeline_item import ColorByInfo
@@ -341,7 +399,17 @@ class PipelineViewModel(QObject):
             return f"Set '{item.name}' to color by '{array_name}' ({array_type})."
         return f"Item {item_id} not found."
     
-    @expose_tool(name="set_opacity", description="Set transparency of the item. 'opacity' must be between 0.0 (fully transparent) and 1.0 (fully opaque).")
+    @expose_tool(
+        name="set_opacity",
+        description=(
+            "Adjusts the transparency of the object.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item.\n"
+            "- opacity: Float between 0.0 (invisible) and 1.0 (opaque).\n"
+            "Returns:\n"
+            "- A confirmation message."
+        )
+    )
     def set_opacity(self, item_id: str, opacity: float) -> str:
         """Set actor opacity."""
         item = self._items.get(item_id)
@@ -350,7 +418,19 @@ class PipelineViewModel(QObject):
             return f"Set '{item.name}' opacity to {opacity}."
         return f"Item {item_id} not found."
     
-    @expose_tool(name="set_visual_property", description="Set multiple visual properties at once: 'point_size', 'line_width', 'gaussian_scale'. Provide values for properties you want to change.")
+    @expose_tool(
+        name="set_visual_property",
+        description=(
+            "Fine-tunes specific visual rendering properties.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item.\n"
+            "- point_size: (Optional) Size of points.\n"
+            "- line_width: (Optional) Thickness of lines.\n"
+            "- gaussian_scale: (Optional) Scale for Point Gaussian.\n"
+            "Returns:\n"
+            "- A message listing updated properties."
+        )
+    )
     def set_visual_property(self, item_id: str, point_size: Optional[float] = None, 
                            line_width: Optional[float] = None, gaussian_scale: Optional[float] = None) -> str:
         """Set multiple visual properties."""
@@ -373,7 +453,16 @@ class PipelineViewModel(QObject):
             return "No properties specified to update."
         return f"Updated properties for '{item.name}': {', '.join(updates)}"
     
-    @expose_tool(name="auto_fit_scalar_range", description="Automatically rescale the color map to fit the min/max values of the current data array.")
+    @expose_tool(
+        name="auto_fit_scalar_range",
+        description=(
+            "Automatically rescales the color map to fit the current data range.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item.\n"
+            "Returns:\n"
+            "- A confirmation message."
+        )
+    )
     def auto_fit_scalar_range(self, item_id: str) -> str:
         """Fit scalar range to data bounds."""
         item = self._items.get(item_id)
@@ -386,7 +475,18 @@ class PipelineViewModel(QObject):
             return f"Rescaled '{item.name}' color range to data bounds."
         return f"Failed to rescale '{item.name}' (maybe not colored by array?)."
 
-    @expose_tool(name="set_scalar_range", description="Manually set the min/max values for the color map. Useful for fixing the color scale across multiple time steps.")
+    @expose_tool(
+        name="set_scalar_range",
+        description=(
+            "Manually sets the minimum and maximum values for the color map.\n"
+            "Parameters:\n"
+            "- item_id: The unique ID of the item.\n"
+            "- min_val: Minimum value.\n"
+            "- max_val: Maximum value.\n"
+            "Returns:\n"
+            "- A confirmation message."
+        )
+    )
     def set_scalar_range(self, item_id: str, min_val: float, max_val: float) -> str:
         """Set custom scalar range."""
         item = self._items.get(item_id)

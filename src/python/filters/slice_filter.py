@@ -309,7 +309,19 @@ class SliceFilter(FilterBase):
             self._on_params_changed_callback(item.id, item.filter_params)
 
     @staticmethod
-    @expose_tool(name="apply_slice_filter", description="Apply a slice filter to cut data along a plane. Returns the new item ID.")
+    @expose_tool(
+        name="apply_slice_filter",
+        description=(
+            "Applies a Slice filter to the selected dataset. This cuts the data with a plane, allowing you to see the cross-section. \n"
+            "Parameters:\n"
+            "- 'normal_x', 'normal_y', 'normal_z': Define the normal vector of the slice plane (e.g., [1,0,0] for X-normal).\n"
+            "- 'origin_x', 'origin_y', 'origin_z': Point on the plane. Defaults to the center of the dataset if not provided.\n"
+            "- 'offsets': String of comma-separated floats (e.g., '0.0, 5.0, -5.0') to create multiple parallel slices.\n"
+            "- 'show_plane': Whether to show the plane widget in the 3D view.\n"
+            "- 'item_id': ID of the object to slice (optional if an item is selected).\n"
+            "Returns the ID of the new slice item."
+        )
+    )
     def create_tool(
         normal_x: float = 1.0,
         normal_y: float = 0.0,
@@ -360,7 +372,18 @@ class SliceFilter(FilterBase):
         return "Error: Failed to apply slice filter"
 
     @staticmethod
-    @expose_tool(name="update_slice_filter_params", description="Update parameters of an existing slice filter.")
+    @expose_tool(
+        name="update_slice_filter_params",
+        description=(
+            "Updates the parameters of an existing Slice filter, such as moving the plane or changing the normal.\n"
+            "Parameters:\n"
+            "- 'item_id': The ID of the slice filter to update.\n"
+            "- 'origin_x/y/z', 'normal_x/y/z': New plane geometry.\n"
+            "- 'offsets': New comma-separated list of offsets.\n"
+            "- 'show_plane': Toggle plane visibility.\n"
+            "- 'apply': If True, re-calculates the filter immediately."
+        )
+    )
     def update_tool(
         item_id: Optional[str] = None,
         origin_x: Optional[float] = None,
