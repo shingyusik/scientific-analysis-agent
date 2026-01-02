@@ -63,7 +63,7 @@ class VTKViewModel(QObject):
             if name == preset_name:
                 self._current_background = (name, c1, c2)
                 self.background_changed.emit(c1, c2)
-                logger.info(f"배경색 프리셋 변경: {preset_name}")
+                logger.info(f"Background preset changed: {preset_name}")
                 break
     
     def reset_camera(self) -> None:
@@ -76,26 +76,30 @@ class VTKViewModel(QObject):
         """Request view plane change."""
         if plane in ("xy", "yz", "xz"):
             self.view_plane_requested.emit(plane)
-            logger.info(f"뷰 평면 변경 요청: {plane}")
+            logger.info(f"View plane change requested: {plane}")
     
     def add_actor(self, actor: Any) -> None:
         """Request actor to be added to renderer."""
         self.actor_added.emit(actor)
         self.render_requested.emit()
+        logger.info(f"Actor added: {id(actor)}")
     
     def remove_actor(self, actor: Any) -> None:
         """Request actor to be removed from renderer."""
         self.actor_removed.emit(actor)
         self.render_requested.emit()
+        logger.info(f"Actor removed: {id(actor)}")
     
     def set_actor_visibility(self, actor: Any, visible: bool) -> None:
         """Request actor visibility change."""
         self.actor_visibility_changed.emit(actor, visible)
         self.render_requested.emit()
+        logger.info(f"Actor visibility set to {visible}: {id(actor)}")
     
     def clear_scene(self) -> None:
         """Request to clear all actors from scene."""
         self.clear_scene_requested.emit()
+        logger.info("Clear scene requested")
     
     def request_render(self) -> None:
         """Request a render update."""
@@ -122,6 +126,7 @@ class VTKViewModel(QObject):
         """Request legend settings update."""
         self.legend_settings_changed.emit(settings)
         self.render_requested.emit()
+        logger.info("Legend settings updated")
     
     def request_camera_query(self) -> None:
         """Request current camera state."""
