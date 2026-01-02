@@ -2,6 +2,7 @@ from PySide6.QtCore import QObject, Signal, QEventLoop, QTimer
 from typing import Tuple, List, Any, Optional
 from services.vtk_render_service import VTKRenderService
 from utils.logger import get_logger
+from utils.tool_registry import expose_tool
 
 logger = get_logger("VTKVM")
 
@@ -66,17 +67,22 @@ class VTKViewModel(QObject):
                 logger.info(f"Background preset changed: {preset_name}")
                 break
     
-    def reset_camera(self) -> None:
+    @expose_tool(name="reset_camera_view", description="Reset the camera to a default isometric view ensuring all loaded data is visible.")
+    def reset_camera(self) -> str:
         """Reset camera to default view."""
         # self._render_service.reset_camera() # Service does not handle camera
         logger.info("Camera Reset Requested")
         self.camera_reset_requested.emit()
+        return "Camera reset to default view."
     
-    def set_view_plane(self, plane: str) -> None:
+    @expose_tool(name="set_view_plane", description="Set the camera to look along a specific axis plane. Options: 'xy' (Top), 'yz' (Right), 'xz' (Front).")
+    def set_view_plane(self, plane: str) -> str:
         """Request view plane change."""
         if plane in ("xy", "yz", "xz"):
             self.view_plane_requested.emit(plane)
             logger.info(f"View plane change requested: {plane}")
+            return f"Set view to {plane.upper()} plane."
+        return f"Invalid plane '{plane}'. Use 'xy', 'yz', or 'xz'."
     
     def add_actor(self, actor: Any) -> None:
         """Request actor to be added to renderer."""
@@ -165,6 +171,32 @@ class VTKViewModel(QObject):
         if result_captured[0]:
             return state_data
         return self._last_camera_state  # Return cached state if timeout
+
+    @expose_tool(name="get_camera_state", description="Get current camera parameters including position, focal point, view up vector, and zoom level.")
+    def get_camera_state_tool(self) -> str:
+        """Expose get_camera_state as a tool that returns a string."""
+        state = self.get_camera_state_sync()
+        if not state:
+            return "Could not retrieve camera state."
+        return f"Current camera state: {state}"
+    
+    @expose_tool(name="set_camera_view", description="Manually set camera parameters. Provide 'position' [x,y,z], 'focal_point' [x,y,z], 'view_up' [x,y,z], or 'zoom' (float).")
+    def apply_camera_state_tool(self, position: Optional[List[float]] = None, 
+                               focal_point: Optional[List[float]] = None,
+                               view_up: Optional[List[float]] = None,
+                               zoom: Optional[float] = None) -> str:
+        """Tool wrapper for apply_camera_state."""
+        state = {}
+        if position is not None: state["position"] = position
+        if focal_point is not None: state["focal_point"] = focal_point
+        if view_up is not None: state["view_up"] = view_up
+        if zoom is not None: state["zoom"] = zoom
+        
+        if not state:
+            return "No camera parameters provided."
+
+        self.apply_camera_state(state)
+        return f"Applied camera settings: {state}"
     
     def apply_camera_state(self, state: dict) -> None:
         """Apply new camera settings (position, focal_point, view_up, zoom)."""

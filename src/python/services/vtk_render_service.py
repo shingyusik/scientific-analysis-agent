@@ -220,6 +220,16 @@ class VTKRenderService:
             
         logger.info(f"Color By Set: Array={actual_array_name}, Component={component}")
     
+    def set_background(self, col1: str, col2: str) -> None:
+        """Set background gradient colors."""
+        # TODO: Implement actual renderer background setting if engine exposes it.
+        # For now, logging to prevents AttributeError.
+        logger.info(f"set_background: {col1}, {col2}")
+        if self._engine:
+            # Attempt to set on engine if method exists (hypothetical)
+            if hasattr(self._engine, "set_background"):
+                self._engine.set_background(col1, col2)
+
     def set_opacity(self, actor: Any, value: float) -> None:
         """Set actor opacity (0.0 - 1.0)."""
         actor.GetProperty().SetOpacity(value)

@@ -317,15 +317,19 @@ class PipelineViewModel(QObject):
             return f"Set '{item.name}' to {state}."
         return f"Item {item_id} not found."
     
-    def set_representation(self, item_id: str, style: str) -> None:
+    @expose_tool(name="set_representation", description="Change how the item is rendered. Options: 'Surface', 'Points', 'Wireframe', 'Surface With Edges'. Use 'Points' for large datasets, 'Wireframe' to see mesh structure.")
+    def set_representation(self, item_id: str, style: str) -> str:
         """Set representation style for an item."""
         item = self._items.get(item_id)
         if item and item.actor:
             self._render_service.set_representation(item.actor, style)
             self.item_updated.emit(item)
             self.message.emit(f"Set '{item.name}' representation to {style}.")
+            return f"Set '{item.name}' representation to '{style}'."
+        return f"Item {item_id} not found."
     
-    def set_color_by(self, item_id: str, array_name: str, array_type: str = 'POINT', component: str = '') -> None:
+    @expose_tool(name="set_color_by", description="Color the item by a data array. array_name: Name of array or '__SolidColor__'. array_type: 'POINT' or 'CELL'. component: 'Magnitude', 'X', 'Y', 'Z' or empty string.")
+    def set_color_by(self, item_id: str, array_name: str, array_type: str = 'POINT', component: str = '') -> str:
         """Set coloring by scalar array."""
         from models.pipeline_item import ColorByInfo
         
@@ -334,12 +338,66 @@ class PipelineViewModel(QObject):
             self._render_service.set_color_by(item.actor, array_name, array_type, component)
             item.color_by = ColorByInfo(array_name=array_name, array_type=array_type, component=component)
             self.item_updated.emit(item)
+            return f"Set '{item.name}' to color by '{array_name}' ({array_type})."
+        return f"Item {item_id} not found."
     
-    def set_opacity(self, item_id: str, opacity: float) -> None:
+    @expose_tool(name="set_opacity", description="Set transparency of the item. 'opacity' must be between 0.0 (fully transparent) and 1.0 (fully opaque).")
+    def set_opacity(self, item_id: str, opacity: float) -> str:
         """Set actor opacity."""
         item = self._items.get(item_id)
         if item and item.actor:
             self._render_service.set_opacity(item.actor, opacity)
+            return f"Set '{item.name}' opacity to {opacity}."
+        return f"Item {item_id} not found."
+    
+    @expose_tool(name="set_visual_property", description="Set multiple visual properties at once: 'point_size', 'line_width', 'gaussian_scale'. Provide values for properties you want to change.")
+    def set_visual_property(self, item_id: str, point_size: Optional[float] = None, 
+                           line_width: Optional[float] = None, gaussian_scale: Optional[float] = None) -> str:
+        """Set multiple visual properties."""
+        item = self._items.get(item_id)
+        if not item or not item.actor:
+            return f"Item {item_id} not found."
+            
+        updates = []
+        if point_size is not None:
+            self.set_point_size(item_id, point_size)
+            updates.append(f"point_size={point_size}")
+        if line_width is not None:
+            self.set_line_width(item_id, line_width)
+            updates.append(f"line_width={line_width}")
+        if gaussian_scale is not None:
+            self.set_gaussian_scale(item_id, gaussian_scale)
+            updates.append(f"gaussian_scale={gaussian_scale}")
+            
+        if not updates:
+            return "No properties specified to update."
+        return f"Updated properties for '{item.name}': {', '.join(updates)}"
+    
+    @expose_tool(name="auto_fit_scalar_range", description="Automatically rescale the color map to fit the min/max values of the current data array.")
+    def auto_fit_scalar_range(self, item_id: str) -> str:
+        """Fit scalar range to data bounds."""
+        item = self._items.get(item_id)
+        if not item or not item.actor:
+            return f"Item {item_id} not found."
+            
+        success = self._render_service.fit_scalar_range(item.actor)
+        if success:
+            self.item_updated.emit(item)
+            return f"Rescaled '{item.name}' color range to data bounds."
+        return f"Failed to rescale '{item.name}' (maybe not colored by array?)."
+
+    @expose_tool(name="set_scalar_range", description="Manually set the min/max values for the color map. Useful for fixing the color scale across multiple time steps.")
+    def set_scalar_range(self, item_id: str, min_val: float, max_val: float) -> str:
+        """Set custom scalar range."""
+        item = self._items.get(item_id)
+        if not item or not item.actor:
+            return f"Item {item_id} not found."
+            
+        success = self._render_service.set_custom_scalar_range(item.actor, min_val, max_val)
+        if success:
+            self.item_updated.emit(item)
+            return f"Set '{item.name}' color range to [{min_val}, {max_val}]."
+        return f"Failed to set color range for '{item.name}'."
     
     def set_point_size(self, item_id: str, size: float) -> None:
         """Set point size."""
