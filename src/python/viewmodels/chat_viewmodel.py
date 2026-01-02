@@ -1,4 +1,5 @@
 import json
+import uuid
 from PySide6.QtCore import QObject, Signal, QThread
 from typing import List, Optional, Dict, Any, TYPE_CHECKING
 from langchain_core.messages import HumanMessage, AIMessage, AIMessageChunk, BaseMessage, ToolMessage
@@ -178,7 +179,7 @@ class ChatViewModel(QObject):
         self._worker: Optional[StreamingAgentWorker] = None
         self._current_response = ""
         self._waiting_for_input = False
-        self._thread_config = {"configurable": {"thread_id": "1"}}
+        self._thread_config = {"configurable": {"thread_id": str(uuid.uuid4())}}
         
         self._initialize_agent()
     
@@ -400,5 +401,6 @@ class ChatViewModel(QObject):
     def start_new_conversation(self) -> None:
         """Start a new conversation, clearing chat history only."""
         logger.info("Starting new conversation (History Clear)")
+        self._thread_config = {"configurable": {"thread_id": str(uuid.uuid4())}}
         self.clear_history()
         self.conversation_cleared.emit()
