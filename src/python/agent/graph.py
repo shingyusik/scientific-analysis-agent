@@ -95,6 +95,7 @@ def create_guardrail_node(model):
         logger.debug(f"Guardrail decision: {decision.decision} (Reason: {decision.reason})")
         
         if decision.decision == "blocked":
+            logger.info(f"Guardrail Blocked: {decision.reason}")
             response_content = (
                 "죄송합니다. 이 요청은 과학 시각화 분석과 관련이 없어 처리할 수 없습니다. "
                 "VTK 데이터 시각화, 필터 적용, 파이프라인 조작 등에 관해 질문해 주세요.\n\n"
@@ -133,7 +134,7 @@ def create_agent_node(model, tools: list):
         
         logger.info("Agent Invocation Start")
         response = model_with_tools.invoke(messages)
-        logger.info("Agent Invocation End")
+        logger.info(f"Agent Invocation End (Response type: {type(response).__name__})")
         return {"messages": [response]}
     
     return agent_node
@@ -150,6 +151,7 @@ def create_agent():
     
     tools = get_all_tools()
     tool_node = ToolNode(tools)
+    logger.info(f"Initialized tool node with {len(tools)} tools")
     agent_node = create_agent_node(model, tools)
     guardrail_node = create_guardrail_node(model)
     
