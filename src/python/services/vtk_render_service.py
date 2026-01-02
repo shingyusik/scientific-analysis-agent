@@ -23,7 +23,7 @@ class VTKRenderService:
     def engine(self):
         return self._engine
     
-    @log_execution(start_msg="Cone Source 생성 시작", end_msg="Cone Source 생성 완료")
+    @log_execution(start_msg="Cone Source Creation Started", end_msg="Cone Source Created")
     def create_cone_source(self) -> Tuple[Any, Any]:
         """Create a cone source with elevation scalars and vector field."""
         cone = vtk.vtkConeSource()
@@ -90,7 +90,7 @@ class VTKRenderService:
         
         return actor
     
-    @log_execution(start_msg="Contour 필터 적용", end_msg="Contour 필터 완료")
+    @log_execution(start_msg="Contour Filter Started", end_msg="Contour Filter Applied")
     def apply_contour(self, data: Any, value: float, array_name: str = None) -> Tuple[Any, Any]:
         """Apply contour filter."""
         contour = vtk.vtkContourFilter()
@@ -107,7 +107,7 @@ class VTKRenderService:
         
         return actor, contour_data
     
-    @log_execution(start_msg="Elevation 필터 적용", end_msg="Elevation 필터 완료")
+    @log_execution(start_msg="Elevation Filter Started", end_msg="Elevation Filter Applied")
     def apply_elevation(self, data: Any) -> Any:
         """Apply elevation filter."""
         bounds = data.GetBounds()
@@ -197,6 +197,7 @@ class VTKRenderService:
         
         if array_name == "__SolidColor__":
             mapper.ScalarVisibilityOff()
+            logger.info("Color By Set: Solid Color")
             return
         
         data = mapper.GetInput()
@@ -240,7 +241,7 @@ class VTKRenderService:
             lut.SetRange(rng[0], rng[1])
             lut.Modified()
             
-        logger.info(f"Color By 설정: Array={actual_array_name}, Component={component}")
+        logger.info(f"Color By Set: Array={actual_array_name}, Component={component}")
     
     def set_opacity(self, actor: Any, value: float) -> None:
         """Set actor opacity (0.0 - 1.0)."""
@@ -328,7 +329,7 @@ class VTKRenderService:
             lut.SetRange(rng[0], rng[1])
             lut.Modified()
         
-        logger.info(f"Scalar Range 자동 맞춤: {rng}")
+        logger.info("Scalar Range Fitted to Data")
         return True
     
     def set_custom_scalar_range(self, actor: Any, min_val: float, max_val: float) -> bool:

@@ -6,7 +6,7 @@ from utils.logger import get_logger, log_execution
 logger = get_logger("AgentTools")
 
 @tool
-@log_execution(start_msg="[Tool] Slice 필터 적용", end_msg="[Tool] Slice 필터 적용 완료")
+@log_execution(start_msg="[Tool] Apply Slice Filter", end_msg="[Tool] Slice Filter Applied")
 def apply_slice_filter(
     normal_x: float = 1.0,
     normal_y: float = 0.0,
@@ -70,7 +70,7 @@ def apply_slice_filter(
 
 
 @tool
-@log_execution(start_msg="[Tool] Clip 필터 적용", end_msg="[Tool] Clip 필터 적용 완료")
+@log_execution(start_msg="[Tool] Apply Clip Filter", end_msg="[Tool] Clip Filter Applied")
 def apply_clip_filter(
     normal_x: float = 1.0,
     normal_y: float = 0.0,
@@ -126,7 +126,7 @@ def apply_clip_filter(
 
 
 @tool
-@log_execution(start_msg="[Tool] 필터 파라미터 조회", end_msg="[Tool] 필터 파라미터 조회 완료")
+@log_execution(start_msg="[Tool] Get Filter Params", end_msg="[Tool] Params Retrieved")
 def get_filter_params(item_id: Optional[str] = None) -> str:
     """Get the current parameters of a filter item.
     
@@ -169,7 +169,7 @@ def get_filter_params(item_id: Optional[str] = None) -> str:
 
 
 @tool
-@log_execution(start_msg="[Tool] Slice 파라미터 업데이트", end_msg="[Tool] Slice 업데이트 완료")
+@log_execution(start_msg="[Tool] Update Slice Params", end_msg="[Tool] Slice Params Updated")
 def update_slice_filter_params(
     item_id: Optional[str] = None,
     origin_x: Optional[float] = None,
@@ -263,7 +263,7 @@ def update_slice_filter_params(
 
 
 @tool
-@log_execution(start_msg="[Tool] Clip 파라미터 업데이트", end_msg="[Tool] Clip 업데이트 완료")
+@log_execution(start_msg="[Tool] Update Clip Params", end_msg="[Tool] Clip Params Updated")
 def update_clip_filter_params(
     item_id: Optional[str] = None,
     origin_x: Optional[float] = None,

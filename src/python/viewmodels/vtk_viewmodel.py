@@ -51,13 +51,11 @@ class VTKViewModel(QObject):
     def render_service(self) -> VTKRenderService:
         return self._render_service
     
-    def set_background(self, color1: Tuple[float, float, float], 
-                       color2: Tuple[float, float, float] = None) -> None:
-        """Set background color."""
-        self._current_background = ("Custom", color1, color2)
-        self._current_background = ("Custom", color1, color2)
-        self.background_changed.emit(color1, color2)
-        logger.info(f"배경색 변경: Custom ({color1}, {color2})")
+    def set_background(self, col1: str, col2: str) -> None:
+        """Set background gradient colors."""
+        self._render_service.set_background(col1, col2)
+        logger.info(f"Background Set: {col1}, {col2}")
+        self.background_changed.emit(col1, col2)
     
     def set_background_preset(self, preset_name: str) -> None:
         """Set background from preset."""
@@ -69,9 +67,10 @@ class VTKViewModel(QObject):
                 break
     
     def reset_camera(self) -> None:
-        """Request camera reset."""
+        """Reset camera to default view."""
+        self._render_service.reset_camera()
+        logger.info("Camera Reset Requested")
         self.camera_reset_requested.emit()
-        logger.info("카메라 리셋 요청")
     
     def set_view_plane(self, plane: str) -> None:
         """Request view plane change."""
@@ -165,8 +164,10 @@ class VTKViewModel(QObject):
     def apply_camera_state(self, state: dict) -> None:
         """Apply new camera settings (position, focal_point, view_up, zoom)."""
         self.camera_apply_requested.emit(state)
-        self.render_requested.emit()
-        logger.info(f"카메라 상태 적용: {state}")
+        if self._render_service.apply_camera_state(state):
+            logger.info(f"Camera State Applied: {state}")
+            self.request_render()
+            return True
     
     def get_representation_style(self, actor: Any) -> str:
         """Get actor's current representation style."""

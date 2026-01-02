@@ -61,7 +61,7 @@ class TimeSeriesManager(QObject):
     def has_time_series(self) -> bool:
         return self._current_item is not None and self._current_item.is_time_series
     
-    @log_execution(start_msg="타임 시리즈 아이템 설정", end_msg="타임 시리즈 아이템 설정 완료")
+    @log_execution(start_msg="Time Series Item Set", end_msg="Time Series Item Setting Completed")
     def set_item(self, item: Optional[PipelineItem]) -> None:
         """Set the current item to control."""
         if self._is_playing:
@@ -81,7 +81,7 @@ class TimeSeriesManager(QObject):
         if self._is_playing:
             self._timer.setInterval(self._interval_ms)
     
-    @log_execution(start_msg="정재생 시작", end_msg="정재생 시작됨")
+    @log_execution(start_msg="Forward Play Started", end_msg="Forward Play activated")
     def play_forward(self) -> None:
         """Start forward animation playback."""
         if not self.has_time_series:
@@ -102,7 +102,7 @@ class TimeSeriesManager(QObject):
         self._timer.start(self._interval_ms)
         self.animation_state_changed.emit(True, True)
     
-    @log_execution(start_msg="역재생 시작", end_msg="역재생 시작됨")
+    @log_execution(start_msg="Backward Play Started", end_msg="Backward Play activated")
     def play_backward(self) -> None:
         """Start backward animation playback."""
         if not self.has_time_series:
@@ -123,7 +123,7 @@ class TimeSeriesManager(QObject):
         self._timer.start(self._interval_ms)
         self.animation_state_changed.emit(True, False)
     
-    @log_execution(start_msg="재생 일시정지", end_msg="재생 일시정지됨")
+    @log_execution(start_msg="Playback Paused", end_msg="Playback Paused")
     def pause(self) -> None:
         """Pause animation playback."""
         if not self._is_playing:

@@ -1,3 +1,4 @@
+from typing import Optional
 from langchain_core.tools import tool
 from agent.tools.context import get_pipeline_viewmodel, get_vtk_viewmodel
 from utils.logger import get_logger, log_execution
@@ -5,7 +6,7 @@ from utils.logger import get_logger, log_execution
 logger = get_logger("AgentTools")
 
 @tool
-@log_execution(start_msg="[Tool] 가시성 변경", end_msg="[Tool] 가시성 변경 완료")
+@log_execution(start_msg="[Tool] Set Visibility", end_msg="[Tool] Visibility Set")
 def set_visibility(item_id: str, visible: bool) -> str:
     """Set the visibility of an item in the pipeline.
     
@@ -27,7 +28,7 @@ def set_visibility(item_id: str, visible: bool) -> str:
 
 
 @tool
-@log_execution(start_msg="[Tool] 색상 매핑(ColorBy) 설정", end_msg="[Tool] 색상 매핑 설정 완료")
+@log_execution(start_msg="[Tool] Set Color By", end_msg="[Tool] Color By Set")
 def set_color_by(
     array_name: str,
     item_id: Optional[str] = None,
@@ -59,7 +60,7 @@ def set_color_by(
 
 
 @tool
-@log_execution(start_msg="[Tool] 표현 방식(Representation) 변경", end_msg="[Tool] 표현 방식 변경 완료")
+@log_execution(start_msg="[Tool] Set Representation", end_msg="[Tool] Representation Set")
 def set_representation(style: str, item_id: Optional[str] = None) -> str:
     """Set the representation style of an item (e.g., Surface, Wireframe, Points).
     
@@ -84,7 +85,7 @@ def set_representation(style: str, item_id: Optional[str] = None) -> str:
 
 
 @tool
-@log_execution(start_msg="[Tool] 불투명도(Opacity) 변경", end_msg="[Tool] 불투명도 변경 완료")
+@log_execution(start_msg="[Tool] Set Opacity", end_msg="[Tool] Opacity Set")
 def set_opacity(opacity: float, item_id: Optional[str] = None) -> str:
     """Set the opacity of an item.
     
@@ -109,7 +110,7 @@ def set_opacity(opacity: float, item_id: Optional[str] = None) -> str:
 
 
 @tool
-@log_execution(start_msg="[Tool] 시각 속성(Visual Property) 변경", end_msg="[Tool] 시각 속성 변경 완료")
+@log_execution(start_msg="[Tool] Set Visual Property", end_msg="[Tool] Visual Property Set")
 def set_visual_property(
     point_size: Optional[float] = None,
     line_width: Optional[float] = None,
@@ -154,7 +155,7 @@ def set_visual_property(
 
 
 @tool
-@log_execution(start_msg="[Tool] 스칼라 범위 자동 맞춤", end_msg="[Tool] 스칼라 범위 맞춤 완료")
+@log_execution(start_msg="[Tool] Auto Fit Scalar Range", end_msg="[Tool] Scalar Range Fitted")
 def auto_fit_scalar_range(item_id: Optional[str] = None) -> str:
     """Automatically fit the scalar coloring range of an item to its data min/max values.
     
@@ -181,7 +182,7 @@ def auto_fit_scalar_range(item_id: Optional[str] = None) -> str:
 
 
 @tool
-@log_execution(start_msg="[Tool] 스칼라 범위 직접 설정", end_msg="[Tool] 스칼라 범위 설정 완료")
+@log_execution(start_msg="[Tool] Set Scalar Range", end_msg="[Tool] Scalar Range Set")
 def set_scalar_range(
     min_val: float,
     max_val: float,
@@ -214,7 +215,7 @@ def set_scalar_range(
 
 
 @tool
-@log_execution(start_msg="[Tool] 카메라 상태 조회", end_msg="[Tool] 카메라 상태 조회 완료")
+@log_execution(start_msg="[Tool] Get Camera State", end_msg="[Tool] Camera State Retrieved")
 def get_camera_state() -> str:
     """Get the current camera parameters (position, focal point, view up, zoom)."""
     vm = get_vtk_viewmodel()
@@ -229,7 +230,7 @@ def get_camera_state() -> str:
 
 
 @tool
-@log_execution(start_msg="[Tool] 카메라 뷰 설정", end_msg="[Tool] 카메라 뷰 설정 완료")
+@log_execution(start_msg="[Tool] Set Camera View", end_msg="[Tool] Camera View Set")
 def set_camera_view(
     position: Optional[list[float]] = None,
     focal_point: Optional[list[float]] = None,
@@ -262,7 +263,7 @@ def set_camera_view(
 
 
 @tool
-@log_execution(start_msg="[Tool] 뷰 평면 설정", end_msg="[Tool] 뷰 평면 설정 완료")
+@log_execution(start_msg="[Tool] Set View Plane", end_msg="[Tool] View Plane Set")
 def set_view_plane(plane: str) -> str:
     """Set the camera to look at a specific plane.
     
@@ -281,7 +282,7 @@ def set_view_plane(plane: str) -> str:
 
 
 @tool
-@log_execution(start_msg="[Tool] 카메라 리셋", end_msg="[Tool] 카메라 리셋 완료")
+@log_execution(start_msg="[Tool] Reset Camera", end_msg="[Tool] Camera Reset")
 def reset_camera_view() -> str:
     """Reset the camera to the default isometric view."""
     vm = get_vtk_viewmodel()

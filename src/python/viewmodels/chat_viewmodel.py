@@ -232,7 +232,7 @@ class ChatViewModel(QObject):
         
         self._process_with_agent()
     
-    @log_execution(start_msg="에이전트 처리 시작", end_msg="에이전트 처리 완료")
+    @log_execution(start_msg="Agent Processing Started", end_msg="Agent Processing Finished")
     def _process_with_agent(self) -> None:
         """Process message with LangGraph agent using streaming."""
         self.agent_thinking.emit()

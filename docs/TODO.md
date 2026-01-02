@@ -12,3 +12,5 @@
 - [ ] 이미지 input
 - [ ] context window 남은 양 확인 바
 - [ ] vtk render view llm에 넘기기 (이미지 input)
+- sa-agent : 툴과 원래 함수 하나로 쓸 수 없나?
+- 테이블 뷰 & 그래프 뷰 추가 : 탭으로 추가 (+, - 가능 & 위치 바꾸기 가능 & 고정 가능)

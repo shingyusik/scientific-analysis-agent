@@ -17,7 +17,7 @@ from utils.logger import get_logger, log_execution
 
 logger = get_logger("MainEntry")
 
-@log_execution(start_msg="애플리케이션 시작", end_msg="애플리케이션 종료")
+@log_execution(level="INFO", start_msg="Application Started", end_msg="Application Finished")
 def main():
     app = QApplication(sys.argv)
     Config.load()
@@ -32,8 +32,8 @@ def main():
     window = MainWindow(pipeline_vm, vtk_vm, chat_vm)
     window.show()
     
-    sys.exit(app.exec())
-
+    return app.exec()
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
+

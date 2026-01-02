@@ -13,7 +13,7 @@ class FileLoaderService:
     
     SUPPORTED_EXTENSIONS = {".vtu", ".vti", ".vtk"}
     
-    @log_execution(start_msg="파일 로드 시작", end_msg="파일 로드 완료")
+    @log_execution(start_msg="File Load Started", end_msg="File Load Completed")
     def load(self, file_path: str) -> Tuple[Any, str]:
         """
         Load a VTK data file.
@@ -115,7 +115,7 @@ class FileLoaderService:
         return [int(c) if c.isdigit() else c.lower() 
                 for c in re.split(r'(\d+)', filename)]
     
-    @log_execution(start_msg="시계열 데이터 로드 시작", end_msg="시계열 데이터 로드 완료")
+    @log_execution(start_msg="Time Series Load Started", end_msg="Time Series Load Completed")
     def load_time_series(self, file_paths: List[str]) -> Tuple[List[Any], str]:
         """
         Load all files in a time series.

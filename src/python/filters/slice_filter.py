@@ -68,7 +68,7 @@ class SliceFilter(FilterBase):
     def params_class(self) -> type:
         return SliceParams
     
-    @log_execution(start_msg="Slice 필터 연산 시작", end_msg="Slice 필터 연산 완료")
+    @log_execution(start_msg="Slice Filter Calculation Started", end_msg="Slice Filter Calculation Finished")
     def apply_filter(self, data: Any, params: dict) -> Tuple[Any, Any]:
         """Apply slice filter with multiple offsets."""
         slice_params = SliceParams.from_dict(params)
