@@ -37,6 +37,7 @@ def apply_slice_filter(
     
     target_id = item_id or (vm.selected_item.id if vm.selected_item else None)
     if not target_id:
+        logger.warning("[Tool] apply_slice_filter: No item selected")
         return "Error: No item selected. Please select an item first or provide item_id."
     
     target_item = vm.items.get(target_id)
@@ -66,6 +67,7 @@ def apply_slice_filter(
     if result:
         vm.commit_filter(result.id)
         return f"Successfully applied slice filter to '{target_item.name}'. New item: '{result.name}' (id: {result.id})"
+    logger.error(f"[Tool] apply_slice_filter: Failed to apply filter to {target_id}")
     return "Error: Failed to apply slice filter"
 
 
@@ -99,6 +101,7 @@ def apply_clip_filter(
     
     target_id = item_id or (vm.selected_item.id if vm.selected_item else None)
     if not target_id:
+        logger.warning("[Tool] apply_clip_filter: No item selected")
         return "Error: No item selected. Please select an item first or provide item_id."
     
     target_item = vm.items.get(target_id)
@@ -122,6 +125,7 @@ def apply_clip_filter(
     if result:
         vm.commit_filter(result.id)
         return f"Successfully applied clip filter to '{target_item.name}'. New item: '{result.name}' (id: {result.id})"
+    logger.error(f"[Tool] apply_clip_filter: Failed to apply filter to {target_id}")
     return "Error: Failed to apply clip filter"
 
 

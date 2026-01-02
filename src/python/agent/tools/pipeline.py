@@ -12,10 +12,12 @@ def get_pipeline_info() -> str:
     """
     vm = get_pipeline_viewmodel()
     if not vm:
+        logger.error("[Tool] get_pipeline_info: Pipeline not initialized")
         return "Error: Pipeline not initialized"
     
     items = vm.items
     if not items:
+        logger.info("[Tool] get_pipeline_info: Pipeline is empty")
         return "No items in pipeline. Load a file first."
     
     result = []
@@ -49,6 +51,7 @@ def select_pipeline_item(item_id: str) -> str:
     
     item = vm.items.get(item_id)
     if not item:
+        logger.warning(f"[Tool] select_pipeline_item: Item {item_id} not found")
         return f"Error: Item {item_id} not found"
     
     vm.select_item(item_id)

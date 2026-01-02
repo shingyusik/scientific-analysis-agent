@@ -177,7 +177,9 @@ def auto_fit_scalar_range(item_id: Optional[str] = None) -> str:
     success = vm.render_service.fit_scalar_range(item.actor)
     if success:
         vm.item_updated.emit(item)
+        vm.item_updated.emit(item)
         return f"Rescaled '{item.name}' scalar range to match data bounds."
+    logger.warning(f"[Tool] auto_fit_scalar_range: Failed to fit range for {item.name}")
     return f"Error: Failed to auto-fit range for '{item.name}' (maybe not colored by array?)"
 
 
@@ -210,7 +212,9 @@ def set_scalar_range(
     success = vm.render_service.set_custom_scalar_range(item.actor, min_val, max_val)
     if success:
         vm.item_updated.emit(item)
+        vm.item_updated.emit(item)
         return f"Set '{item.name}' scalar range to [{min_val}, {max_val}]."
+    logger.warning(f"[Tool] set_scalar_range: Failed to set custom range for {item.name}")
     return f"Error: Failed to set custom range for '{item.name}'"
 
 
@@ -224,6 +228,7 @@ def get_camera_state() -> str:
     
     state = vm.get_camera_state_sync()
     if not state:
+        logger.error("[Tool] get_camera_state: Failed to retrieve camera state")
         return "Error: Could not retrieve camera state."
         
     return f"Current camera state: {state}"
