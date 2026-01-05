@@ -45,7 +45,7 @@ def get_all_tools() -> List[BaseTool]:
     for filter_type in filters.get_all_filter_types():
         filter_cls = filters.get_filter(filter_type)
         if filter_cls:
-            cls_tools = generate_tools(filter_cls)
+            cls_tools = generate_tools(filter_cls, filter_type)
             if cls_tools:
                 logger.info(f"Generated {len(cls_tools)} tools from filter class {filter_cls.__name__}")
                 tools.extend(cls_tools)
