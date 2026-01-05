@@ -6,7 +6,6 @@
 - 난이도 측정 llm
 - sequential thinking
 - 백그라운드 색 툴
-- time 스텝 옮기기 툴 (재생, 앞/뒤로가기, 맨 앞/뒤로가기, 특정 step으로 가기)
 - 이미지 input
 - context window 남은 양 확인 바
 - vtk render view llm에 넘기기 (이미지 input)
