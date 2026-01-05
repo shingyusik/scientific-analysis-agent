@@ -189,14 +189,38 @@ class TimeSeriesManager(QObject):
         else:
             self.play_backward()
     
+    @expose_tool(
+        name="go_to_first_step",
+        description=(
+            "Jumps to the very first time step (index 0).\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def go_to_first(self) -> None:
         """Go to first time step."""
         self.set_time_index(0)
     
+    @expose_tool(
+        name="go_to_last_step",
+        description=(
+            "Jumps to the very last time step.\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def go_to_last(self) -> None:
         """Go to last time step."""
         self.set_time_index(self.max_index)
     
+    @expose_tool(
+        name="step_forward_animation",
+        description=(
+            "Moves one time step forward.\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def step_forward(self) -> None:
         """Advance one time step."""
         if not self.has_time_series:
@@ -211,6 +235,14 @@ class TimeSeriesManager(QObject):
         
         self.set_time_index(new_index)
     
+    @expose_tool(
+        name="step_backward_animation",
+        description=(
+            "Moves one time step backward.\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def step_backward(self) -> None:
         """Go back one time step."""
         if not self.has_time_series:
