@@ -181,9 +181,10 @@ class ChatViewModel(QObject):
         self._waiting_for_input = False
         self._thread_config = {"configurable": {"thread_id": str(uuid.uuid4())}}
         
-        self._initialize_agent()
+        # Do NOT initialize agent here - wait for explicit call after all context is registered
     
-    def _initialize_agent(self) -> None:
+    def initialize_agent(self) -> None:
+        """Initialize the agent after all ViewModels and Managers are registered in app_context."""
         if self._pipeline_vm:
             set_pipeline_viewmodel(self._pipeline_vm)
         if self._vtk_vm:
@@ -191,6 +192,7 @@ class ChatViewModel(QObject):
         
         if Config.is_configured():
             self._agent = create_agent()
+            logger.info("Agent initialized with all tools")
     
     def set_vtk_viewmodel(self, vm: "VTKViewModel") -> None:
         self._vtk_vm = vm

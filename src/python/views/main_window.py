@@ -14,6 +14,7 @@ from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
 from viewmodels.time_series_manager import TimeSeriesManager
 from models.properties_context import PropertiesPanelContext
+from utils.app_context import set_time_series_manager
 import filters
 
 
@@ -128,6 +129,12 @@ class MainWindow(QMainWindow):
         self._vtk_vm = vtk_vm
         self._chat_vm = chat_vm
         self._time_manager = TimeSeriesManager(self)
+        
+        # Register TimeSeriesManager in app context for agent tool access
+        set_time_series_manager(self._time_manager)
+        
+        # NOW initialize the agent after all context is registered
+        self._chat_vm.initialize_agent()
         
         self.setWindowTitle("Scientific Analysis Agent")
         self.resize(1400, 900)
@@ -331,6 +338,7 @@ class MainWindow(QMainWindow):
         self._vtk_vm.actor_added.connect(self._vtk_widget.add_actor)
         self._vtk_vm.actor_removed.connect(self._vtk_widget.remove_actor)
         self._vtk_vm.actor_visibility_changed.connect(self._vtk_widget.set_actor_visibility)
+        self._vtk_vm.clear_scene_requested.connect(self._pipeline_vm.clear_all_items)
         self._vtk_vm.clear_scene_requested.connect(self._vtk_widget.clear_scene)
         self._vtk_vm.background_changed.connect(self._vtk_widget.set_background)
         self._vtk_vm.camera_reset_requested.connect(self._vtk_widget.reset_camera)
