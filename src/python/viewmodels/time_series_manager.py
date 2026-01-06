@@ -8,10 +8,11 @@ logger = get_logger("TimeSeriesMgr")
 
 
 class TimeSeriesManager(QObject):
-    """Manages time series animation and playback."""
+    """Manages time series playback and animation."""
     
     time_changed = Signal(str, int)  # item_id, time_index
     animation_state_changed = Signal(bool, bool)  # is_playing, is_forward
+    animation_start_requested = Signal(bool)  # True for forward, False for backward
     
     DEFAULT_INTERVAL_MS = 100
     
@@ -25,6 +26,9 @@ class TimeSeriesManager(QObject):
         
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._on_timer_tick)
+        
+        # Connect signal to slot for thread-safe timer control
+        self.animation_start_requested.connect(self._start_animation_timer)
     
     @property
     def current_item(self) -> Optional[PipelineItem]:
@@ -118,14 +122,20 @@ class TimeSeriesManager(QObject):
     @log_execution(start_msg="Forward Play Started", end_msg="Forward Play activated")
     def play_forward(self) -> None:
         """Start forward animation playback."""
+        # Auto-detect time series item if not set
         if not self.has_time_series:
+            self._auto_select_time_series_item()
+        
+        # Check again after auto-selection attempt
+        if not self.has_time_series:
+            logger.warning("No time series item available for playback")
             return
         
         if self._is_playing and self._play_forward:
             return
         
         if self._is_playing:
-            self._timer.stop()
+            self.pause()
         
         self._play_forward = True
         
@@ -133,8 +143,32 @@ class TimeSeriesManager(QObject):
             self.go_to_first()
         
         self._is_playing = True
-        self._timer.start(self._interval_ms)
+        # Request timer start via signal for thread safety
+        self.animation_start_requested.emit(True)
         self.animation_state_changed.emit(True, True)
+    
+    def _auto_select_time_series_item(self) -> None:
+        """Automatically find and select a time series item from the pipeline."""
+        from utils.app_context import get_pipeline_viewmodel
+        pipeline_vm = get_pipeline_viewmodel()
+        
+        if not pipeline_vm:
+            logger.warning("PipelineViewModel not available for auto-selection")
+            return
+        
+        # Find first time series item in pipeline
+        for item in pipeline_vm.items.values():
+            if item.is_time_series:
+                logger.info(f"Auto-selected time series item: {item.name}")
+                self.set_item(item)
+                return
+        
+        logger.warning("No time series items found in pipeline")
+    
+    def _start_animation_timer(self, forward: bool) -> None:
+        """Slot to start timer in main thread (called via signal)."""
+        self._timer.start(self._interval_ms)
+        logger.debug(f"Animation timer started ({'forward' if forward else 'backward'})")
     
     @log_execution(start_msg="Backward Play Started", end_msg="Backward Play activated")
     def play_backward(self) -> None:
@@ -146,7 +180,7 @@ class TimeSeriesManager(QObject):
             return
         
         if self._is_playing:
-            self._timer.stop()
+            self.pause()
         
         self._play_forward = False
         
@@ -154,7 +188,8 @@ class TimeSeriesManager(QObject):
             self.go_to_last()
         
         self._is_playing = True
-        self._timer.start(self._interval_ms)
+        # Request timer start via signal for thread safety
+        self.animation_start_requested.emit(False)
         self.animation_state_changed.emit(True, False)
     
     @expose_tool(
@@ -199,6 +234,8 @@ class TimeSeriesManager(QObject):
     )
     def go_to_first(self) -> None:
         """Go to first time step."""
+        if not self.has_time_series:
+            self._auto_select_time_series_item()
         self.set_time_index(0)
     
     @expose_tool(
@@ -211,6 +248,8 @@ class TimeSeriesManager(QObject):
     )
     def go_to_last(self) -> None:
         """Go to last time step."""
+        if not self.has_time_series:
+            self._auto_select_time_series_item()
         self.set_time_index(self.max_index)
     
     @expose_tool(
@@ -223,6 +262,9 @@ class TimeSeriesManager(QObject):
     )
     def step_forward(self) -> None:
         """Advance one time step."""
+        if not self.has_time_series:
+            self._auto_select_time_series_item()
+        
         if not self.has_time_series:
             return
         
@@ -245,6 +287,9 @@ class TimeSeriesManager(QObject):
     )
     def step_backward(self) -> None:
         """Go back one time step."""
+        if not self.has_time_series:
+            self._auto_select_time_series_item()
+        
         if not self.has_time_series:
             return
         
@@ -270,6 +315,9 @@ class TimeSeriesManager(QObject):
     @log_execution(level="DEBUG") # Frequent calls, use DEBUG
     def set_time_index(self, index: int) -> None:
         """Set specific time index."""
+        if not self._current_item or not self._current_item.is_time_series:
+            self._auto_select_time_series_item()
+        
         if not self._current_item or not self._current_item.is_time_series:
             return
         
