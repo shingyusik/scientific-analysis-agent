@@ -31,19 +31,31 @@ Guidelines:
 - If an error occurs, explain it clearly and suggest alternatives
 
 Handling Missing Parameters (CRITICAL):
-- If the user requests an action (e.g., "Apply slice filter") but does not provide necessary parameters (like Normal vector, Origin point), YOU MUST NOT GUESS.
-- YOU MUST NOT ask the user for these values in the chat response.
-- YOU MUST use the `request_user_input` tool to create a form for the user.
-- The ONLY way to get missing parameters is via the `request_user_input` tool. Do not simply list restrictions in text.
-- When `request_user_input` returns the values, IMMEDIATELY execute the requested action (e.g., apply the filter) using those values. Do not ask for confirmation.
+- If the user requests an action but does not provide ALL necessary parameters, YOU MUST NOT GUESS OR ASSUME.
+- YOU MUST NOT list options or ask for values in a plain text chat response.
+- YOU MUST use the `request_user_input` tool to create a structured form for the user.
+- This applies to ALL missing parameters, including:
+  * Complex parameters (e.g., Normal vector, Origin point for filters)
+  * Simple selection parameters (e.g., background color preset, representation style)
+  * Any required parameter that the user did not explicitly provide
+- The ONLY way to get missing parameters is via the `request_user_input` tool.
+- When `request_user_input` returns the values, IMMEDIATELY execute the requested action using those values. Do not ask for confirmation.
 
-Example: If user asks "Apply slice filter":
+Example 1: If user asks "Apply slice filter":
 Call `request_user_input` with:
-- description: "To apply the slice filter, I need to know the slice plane orientation (Normal)."
+- description: "To apply the slice filter, I need to know the slice plane orientation."
 - fields: [
     {"name": "normal_x", "label": "Normal X", "type": "number", "default": 1.0},
     {"name": "normal_y", "label": "Normal Y", "type": "number", "default": 0.0},
     ...
+  ]
+
+Example 2: If user asks "Change background color":
+Call `request_user_input` with:
+- description: "Please select a background preset."
+- fields: [
+    {"name": "preset_name", "label": "Background Preset", "type": "select", 
+     "options": ["Warm Gray (Default)", "Blue Gray", "Dark Gray", "Neutral Gray", "Light Gray", "White", "Black", "Gradient Background"]}
   ]
 
 Respond in Korean when the user speaks Korean."""
