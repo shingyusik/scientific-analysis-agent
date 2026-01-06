@@ -58,6 +58,24 @@ class VTKViewModel(QObject):
         logger.info(f"Background Set: {col1}, {col2}")
         self.background_changed.emit(col1, col2)
     
+    @expose_tool(
+        name="set_background",
+        description=(
+            "Changes the background color of the 3D viewport.\n"
+            "Parameters:\n"
+            "- preset_name: Name of the preset. Available options:\n"
+            "  * 'Warm Gray (Default)'\n"
+            "  * 'Blue Gray'\n"
+            "  * 'Dark Gray'\n"
+            "  * 'Neutral Gray'\n"
+            "  * 'Light Gray'\n"
+            "  * 'White'\n"
+            "  * 'Black'\n"
+            "  * 'Gradient Background'\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def set_background_preset(self, preset_name: str) -> None:
         """Set background from preset."""
         for name, c1, c2 in self.BACKGROUND_PRESETS:
@@ -118,6 +136,14 @@ class VTKViewModel(QObject):
         self.render_requested.emit()
         logger.info(f"Actor visibility set to {visible}: {id(actor)}")
     
+    @expose_tool(
+        name="clear_scene",
+        description=(
+            "Clears all objects from the 3D viewport, resetting the scene to empty.\n"
+            "Returns:\n"
+            "- None."
+        )
+    )
     def clear_scene(self) -> None:
         """Request to clear all actors from scene."""
         self.clear_scene_requested.emit()
