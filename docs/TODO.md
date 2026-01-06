@@ -5,7 +5,6 @@
 - 이전 요청 수정 후 재요청
 - 난이도 측정 llm
 - sequential thinking
-- 백그라운드 색 툴
 - 이미지 input
 - context window 남은 양 확인 바
 - vtk render view llm에 넘기기 (이미지 input)
