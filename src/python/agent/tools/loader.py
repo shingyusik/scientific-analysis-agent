@@ -1,7 +1,7 @@
 from typing import List
 from langchain_core.tools import BaseTool
 
-from utils.app_context import get_pipeline_viewmodel, get_vtk_viewmodel
+from utils.app_context import get_pipeline_viewmodel, get_vtk_viewmodel, get_time_series_manager
 from agent.tools.interaction import request_user_input
 from utils.tool_registry import generate_tools
 from utils.logger import get_logger
@@ -14,11 +14,13 @@ def get_all_tools() -> List[BaseTool]:
     Gather all available tools from various sources:
     1. PipelineViewModel (Visualization tools)
     2. VTKViewModel (Camera tools)
-    3. Filter Classes (Slice/Clip tools)
-    4. Static tools (Interaction)
+    3. TimeSeriesManager (Animation tools)
+    4. Filter Classes (Slice/Clip tools)
+    5. Static tools (Interaction)
     """
     pipeline_vm = get_pipeline_viewmodel()
     vtk_vm = get_vtk_viewmodel()
+    ts_manager = get_time_series_manager()
     
     # Static tools
     tools = [
@@ -40,6 +42,14 @@ def get_all_tools() -> List[BaseTool]:
         tools.extend(vtk_tools)
     else:
         logger.warning("VTKViewModel not available, camera tools will be missing")
+    
+    # Dynamic tools from TimeSeriesManager
+    if ts_manager:
+        ts_tools = generate_tools(ts_manager)
+        logger.info(f"Generated {len(ts_tools)} tools from TimeSeriesManager")
+        tools.extend(ts_tools)
+    else:
+        logger.warning("TimeSeriesManager not available, animation tools will be missing")
     
     # Dynamic tools from Filter Classes
     for filter_type in filters.get_all_filter_types():
