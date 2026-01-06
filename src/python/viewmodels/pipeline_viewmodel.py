@@ -331,6 +331,19 @@ class PipelineViewModel(QObject):
         self.item_removed.emit(item_id)
         return f"Deleted item {item_id} and its children."
     
+    @log_execution(start_msg="Clearing All Items", end_msg="All Items Cleared")
+    def clear_all_items(self) -> None:
+        """Delete all pipeline items."""
+        # Get all root item IDs (items without parents)
+        root_items = [item_id for item_id, item in self._items.items() 
+                      if item.parent_id is None]
+        
+        # Delete all root items (this will cascade to children via delete_item)
+        for item_id in list(root_items):  # Use list() to avoid dict size change during iteration
+            self.delete_item(item_id)
+        
+        logger.info(f"Cleared all pipeline items ({len(root_items)} root items)")
+    
     @expose_tool(
         name="set_visibility",
         description=(
@@ -359,7 +372,7 @@ class PipelineViewModel(QObject):
             "Changes the rendering style of the object.\n"
             "Parameters:\n"
             "- item_id: The unique ID of the item.\n"
-            "- style: One of 'Surface', 'Wireframe', 'Points', 'Surface With Edges'.\n"
+            "- style: One of 'Surface', 'Wireframe', 'Points', 'Point Gaussian', 'Surface With Edges'.\n"
             "Returns:\n"
             "- A confirmation message."
         )
@@ -421,11 +434,13 @@ class PipelineViewModel(QObject):
     @expose_tool(
         name="set_visual_property",
         description=(
-            "Fine-tunes specific visual rendering properties.\n"
+            "Fine-tunes specific visual rendering properties (size, width, scale).\n"
+            "IMPORTANT: This does NOT change the representation style (Surface/Points/Wireframe).\n"
+            "To change visualization mode, use 'set_representation' first.\n"
             "Parameters:\n"
             "- item_id: The unique ID of the item.\n"
-            "- point_size: (Optional) Size of points.\n"
-            "- line_width: (Optional) Thickness of lines.\n"
+            "- point_size: (Optional) Size of points (only effective if representation is 'Points').\n"
+            "- line_width: (Optional) Thickness of lines (only effective if representation is 'Wireframe').\n"
             "- gaussian_scale: (Optional) Scale for Point Gaussian.\n"
             "Returns:\n"
             "- A message listing updated properties."
