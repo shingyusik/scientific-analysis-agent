@@ -3,16 +3,22 @@ from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
                                QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox, QLabel)
 from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
+from utils.logger import get_logger
 
 from views.vtk_widget import VTKWidget
 from views.pipeline_browser import PipelineBrowserWidget
 from views.properties_panel import PropertiesPanel
 from views.chat_panel import ChatPanel
 from views.time_animation_widget import TimeAnimationWidget
+from views.tabbed_view_widget import TabbedViewWidget
+from views.table_view_widget import TableViewWidget
+from views.graph_view_widget import GraphViewWidget
 from viewmodels.pipeline_viewmodel import PipelineViewModel
 from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
 from viewmodels.time_series_manager import TimeSeriesManager
+from viewmodels.table_viewmodel import TableViewModel
+from viewmodels.graph_viewmodel import GraphViewModel
 from models.properties_context import PropertiesPanelContext
 from utils.app_context import set_time_series_manager
 import filters
@@ -130,11 +136,18 @@ class MainWindow(QMainWindow):
         self._chat_vm = chat_vm
         self._time_manager = TimeSeriesManager(self)
         
+        # Initialize logger
+        self.logger = get_logger("MainWindow")
+        
         # Register TimeSeriesManager in app context for agent tool access
         set_time_series_manager(self._time_manager)
         
         # NOW initialize the agent after all context is registered
         self._chat_vm.initialize_agent()
+        
+        # Register main window for visualization tools
+        from agent.tools import visualization
+        visualization.set_main_window(self)
         
         self.setWindowTitle("Scientific Analysis Agent")
         self.resize(1400, 900)
@@ -163,6 +176,21 @@ class MainWindow(QMainWindow):
         
         filters_menu = menu_bar.addMenu("Filters")
         self._populate_filters_menu(filters_menu)
+        
+        # View menu for creating tabs
+        view_menu = menu_bar.addMenu("View")
+        
+        new_3d_tab_action = QAction("New 3D View Tab", self)
+        new_3d_tab_action.triggered.connect(lambda: self._create_tab_from_menu("vtk", "3D View"))
+        view_menu.addAction(new_3d_tab_action)
+        
+        new_table_tab_action = QAction("New Table View Tab", self)
+        new_table_tab_action.triggered.connect(lambda: self._create_tab_from_menu("table", "Table"))
+        view_menu.addAction(new_table_tab_action)
+        
+        new_graph_tab_action = QAction("New Graph View Tab", self)
+        new_graph_tab_action.triggered.connect(lambda: self._create_tab_from_menu("graph", "Graph"))
+        view_menu.addAction(new_graph_tab_action)
     
     def _populate_filters_menu(self, menu: QMenu) -> None:
         """Populate filters menu from registry."""
@@ -282,8 +310,16 @@ class MainWindow(QMainWindow):
         
         main_splitter.addWidget(left_sidebar)
         
+        # Create tabbed view widget for center panel
+        self._tabbed_view = TabbedViewWidget()
+        
+        # Create initial VTK render view tab (pinned by default)
         self._vtk_widget = VTKWidget()
-        main_splitter.addWidget(self._vtk_widget)
+        self._default_vtk_tab_id = self._tabbed_view.add_tab_with_id(
+            self._vtk_widget, "vtk", "3D View", pinned=True
+        )
+        
+        main_splitter.addWidget(self._tabbed_view)
         
         self._chat_panel = ChatPanel()
         main_splitter.addWidget(self._chat_panel)
@@ -352,6 +388,10 @@ class MainWindow(QMainWindow):
         self._vtk_vm.scalar_bar_update_requested.connect(self._vtk_widget.update_scalar_bar)
         self._vtk_vm.scalar_bar_hide_requested.connect(self._vtk_widget.hide_scalar_bar)
         self._vtk_vm.legend_settings_changed.connect(self._vtk_widget.apply_legend_settings)
+        
+        # Tabbed view connections
+        self._tabbed_view.tab_created.connect(self._on_tab_created)
+        self._tabbed_view.tab_closed.connect(self._on_tab_closed)
         
         self._time_manager.time_changed.connect(self._on_time_step_changed)
     
@@ -643,3 +683,68 @@ class MainWindow(QMainWindow):
         self._details_tabs.setEnabled(enabled)
         self._chat_panel.set_input_enabled(enabled)
         self._vtk_widget.set_interaction_enabled(enabled)
+    
+    def _on_tab_created(self, tab_id: str, tab_type: str, tab_name: str) -> None:
+        """Handle new tab creation request."""
+        self.logger.info(f"Creating new tab: type={tab_type}, name={tab_name}, id={tab_id}")
+        
+        widget = None
+        
+        if tab_type == "vtk":
+            # Create new VTK widget
+            widget = VTKWidget()
+            # Connect to VTK viewmodel
+            self._vtk_vm.render_requested.connect(widget.render)
+            self._vtk_vm.actor_added.connect(widget.add_actor)
+            self._vtk_vm.actor_removed.connect(widget.remove_actor)
+            self._vtk_vm.actor_visibility_changed.connect(widget.set_actor_visibility)
+            self._vtk_vm.clear_scene_requested.connect(widget.clear_scene)
+            self._vtk_vm.background_changed.connect(widget.set_background)
+            self._vtk_vm.camera_reset_requested.connect(widget.reset_camera)
+            self._vtk_vm.view_plane_requested.connect(widget.set_view_plane)
+            self._vtk_vm.plane_preview_requested.connect(widget.update_plane_preview)
+            self._vtk_vm.plane_preview_hide_requested.connect(widget.hide_plane_preview)
+            self._vtk_vm.camera_apply_requested.connect(widget.apply_camera_state)
+            self._vtk_vm.scalar_bar_update_requested.connect(widget.update_scalar_bar)
+            self._vtk_vm.scalar_bar_hide_requested.connect(widget.hide_scalar_bar)
+            self._vtk_vm.legend_settings_changed.connect(widget.apply_legend_settings)
+            self._chat_vm.render_requested.connect(widget.render)
+            
+        elif tab_type == "table":
+            # Create table viewmodel and widget
+            table_vm = TableViewModel()
+            widget = TableViewWidget(table_vm)
+            
+        elif tab_type == "graph":
+            # Create graph viewmodel and widget
+            graph_vm = GraphViewModel()
+            widget = GraphViewWidget(graph_vm)
+        
+        if widget:
+            # Add tab to tabbed view (will use tab_id from request)
+            actual_tab_id = self._tabbed_view.add_tab_with_id(widget, tab_type, tab_name, pinned=False)
+            # Switch to new tab
+            index = self._tabbed_view.indexOf(widget)
+            self._tabbed_view.setCurrentIndex(index)
+            
+            self.logger.info(f"Tab created successfully: {actual_tab_id}")
+        else:
+            self.logger.error(f"Failed to create tab of type: {tab_type}")
+    
+    def _on_tab_closed(self, tab_id: str) -> None:
+        """Handle tab closure."""
+        self.logger.info(f"Tab closed: {tab_id}")
+        # Cleanup if needed (viewmodels will be garbage collected automatically)
+    
+    def _create_tab_from_menu(self, tab_type: str, default_name: str) -> None:
+        """Create a new tab from menu action."""
+        # Generate unique tab name
+        existing_tabs = self._tabbed_view.get_all_tabs()
+        count = sum(1 for meta in existing_tabs.values() if meta['type'] == tab_type)
+        tab_name = f"{default_name} {count + 1}" if count > 0 else default_name
+        
+        # Generate tab ID
+        tab_id = f"tab_{self._tabbed_view._next_tab_id}"
+        
+        # Trigger tab creation
+        self._on_tab_created(tab_id, tab_type, tab_name)

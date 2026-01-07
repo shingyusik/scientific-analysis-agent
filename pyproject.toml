@@ -15,6 +15,7 @@ dependencies = [
     "pybind11",
     "python-dotenv",
     "markdown",
+    "matplotlib",
 ]
 
 [build-system]
