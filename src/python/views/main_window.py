@@ -152,9 +152,6 @@ class MainWindow(QMainWindow):
         # NOW initialize the agent after all context is registered
         self._chat_vm.initialize_agent()
         
-        # Register main window for visualization tools
-        from agent.tools import visualization
-        visualization.set_main_window(self)
         
         self.setWindowTitle("Scientific Analysis Agent")
         self.resize(1400, 900)
@@ -210,7 +207,8 @@ class MainWindow(QMainWindow):
     
     def _setup_toolbar(self) -> None:
         """Setup the toolbar."""
-        toolbar = self.addToolBar("View Controls")
+        self._toolbar = self.addToolBar("View Controls")
+        toolbar = self._toolbar
         
         action_camera = toolbar.addAction("Camera View")
         action_camera.triggered.connect(self._on_camera_view)
@@ -340,8 +338,9 @@ class MainWindow(QMainWindow):
         main_splitter.setStretchFactor(2, 2)
         main_splitter.setSizes([350, 750, 300])
     
+    
     def _connect_signals(self) -> None:
-        """Connect all signals between views and viewmodels."""
+        """Connect viewmodel signals to UI slots."""
         self._pipeline_vm.item_added.connect(self._on_item_added)
         self._pipeline_vm.item_removed.connect(self._on_item_removed)
         self._pipeline_vm.item_updated.connect(self._on_item_updated)
@@ -368,6 +367,12 @@ class MainWindow(QMainWindow):
         self._chat_vm.message_added.connect(
             lambda msg: self._chat_panel.append_message(msg.sender, msg.content)
         )
+        
+        # AI started/finished handlers
+        self._chat_vm.streaming_started.connect(self._disable_ui_interaction)
+        self._chat_vm.streaming_finished.connect(self._enable_ui_interaction)
+        
+        # Chat panel streaming connections
         self._chat_vm.streaming_started.connect(self._chat_panel.start_streaming)
         self._chat_vm.streaming_token.connect(self._chat_panel.update_streaming)
         self._chat_vm.streaming_finished.connect(self._chat_panel.finish_streaming)
@@ -378,10 +383,6 @@ class MainWindow(QMainWindow):
         self._chat_vm.render_requested.connect(self._vtk_widget.render)
         self._chat_vm.conversation_cleared.connect(self._chat_panel.clear_display)
         
-        self._chat_vm.streaming_started.connect(self._on_ai_started)
-        self._chat_vm.streaming_finished.connect(self._on_ai_finished)
-        
-        self._vtk_vm.render_requested.connect(self._vtk_widget.render)
         self._vtk_vm.actor_added.connect(self._vtk_widget.add_actor)
         self._vtk_vm.actor_removed.connect(self._vtk_widget.remove_actor)
         self._vtk_vm.actor_visibility_changed.connect(self._vtk_widget.set_actor_visibility)
@@ -405,7 +406,92 @@ class MainWindow(QMainWindow):
         self._tabbed_view.tab_closed.connect(self._on_tab_closed)
         self._tabbed_view.currentChanged.connect(self._on_tab_changed)
         
+        # Tab management signals from PipelineViewModel (for LLM tools)
+        self._pipeline_vm.vtk_view_requested.connect(self._handle_vtk_view_request)
+        self._pipeline_vm.table_view_requested.connect(self._handle_table_view_request)
+        self._pipeline_vm.graph_view_requested.connect(self._handle_graph_view_request)
+        self._pipeline_vm.tab_close_requested.connect(self._handle_tab_close_request)
+        self._pipeline_vm.tab_pin_requested.connect(self._handle_tab_pin_request)
+        
         self._time_manager.time_changed.connect(self._on_time_step_changed)
+    
+    def _disable_ui_interaction(self) -> None:
+        """Disable UI elements when AI starts responding."""
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QApplication
+        
+        try:
+            # Set busy cursor
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            
+            # Disable ALL main interaction areas explicitely
+            self._tabbed_view.setEnabled(False)
+            if hasattr(self._tabbed_view, "tabBar"):
+                 self._tabbed_view.tabBar().setEnabled(False)
+
+            if hasattr(self, "_toolbar") and self._toolbar:
+                self._toolbar.setEnabled(False)
+                
+            if hasattr(self, "_pipeline_browser") and self._pipeline_browser:
+                self._pipeline_browser.setEnabled(False)
+                
+            if hasattr(self, "_properties_panel") and self._properties_panel:
+                self._properties_panel.setEnabled(False)
+                
+            if hasattr(self, "_details_tabs") and self._details_tabs:
+                self._details_tabs.setEnabled(False)
+                
+            # Disable menu bar
+            if self.menuBar():
+                self.menuBar().setEnabled(False)
+            
+            # Force update
+            QApplication.processEvents()
+            self.logger.info("UI disabled successfully")
+        except Exception as e:
+            self.logger.error(f"Error disabling UI: {e}", exc_info=True)
+    
+    def _enable_ui_interaction(self) -> None:
+        """Re-enable UI elements when AI finishes responding."""
+        from PySide6.QtCore import QTimer
+        
+        # Small delay to ensure no flickering
+        QTimer.singleShot(100, self._perform_ui_reenable)
+
+    def _perform_ui_reenable(self) -> None:
+        from PySide6.QtWidgets import QApplication
+        
+        try:
+            # Re-enable all elements
+            if hasattr(self, "_tabbed_view"):
+                self._tabbed_view.setEnabled(True)
+                if hasattr(self._tabbed_view, "tabBar"):
+                    self._tabbed_view.tabBar().setEnabled(True)
+            
+            if hasattr(self, "_toolbar") and self._toolbar:
+                self._toolbar.setEnabled(True)
+                
+            if hasattr(self, "_pipeline_browser") and self._pipeline_browser:
+                self._pipeline_browser.setEnabled(True)
+                
+            if hasattr(self, "_properties_panel") and self._properties_panel:
+                self._properties_panel.setEnabled(True)
+
+            if hasattr(self, "_details_tabs") and self._details_tabs:
+                self._details_tabs.setEnabled(True)
+                
+            # Re-enable menu bar
+            if self.menuBar():
+                self.menuBar().setEnabled(True)
+            
+            # Restore cursor (safely loop to clear all overrides if any)
+            while QApplication.overrideCursor() is not None:
+                QApplication.restoreOverrideCursor()
+            
+            QApplication.processEvents()
+            self.logger.info("UI re-enabled successfully")
+        except Exception as e:
+            self.logger.error(f"Error in _on_ai_finished: {e}", exc_info=True)
     
     def _initialize(self) -> None:
         """Initialize the application state."""
@@ -776,19 +862,46 @@ class MainWindow(QMainWindow):
             index = self._tabbed_view.indexOf(widget)
             self._tabbed_view.setCurrentIndex(index)
             
+            # Register tab in PipelineViewModel
+            self._pipeline_vm.register_tab(actual_tab_id, tab_name, tab_type, pinned=False)
+            
             self.logger.info(f"Tab created successfully: {actual_tab_id}")
         else:
             self.logger.error(f"Failed to create tab of type: {tab_type}")
     
     def _on_tab_closed(self, tab_id: str) -> None:
-        """Handle tab closure."""
+        """Handle tab closure and clean up resources."""
         self.logger.info(f"Tab closed: {tab_id}")
+        
+        # Get widget before cleanup to disconnect signals
+        widget = self._tabbed_view.get_tab_widget_by_id(tab_id)
+        if widget and hasattr(widget, 'render'):  # Likely a VTKWidget
+            try:
+                self._vtk_vm.render_requested.disconnect(widget.render)
+                self._vtk_vm.actor_added.disconnect(widget.add_actor)
+                self._vtk_vm.actor_removed.disconnect(widget.remove_actor)
+                self._vtk_vm.actor_visibility_changed.disconnect(widget.set_actor_visibility)
+                self._vtk_vm.clear_scene_requested.disconnect(widget.clear_scene)
+                self._vtk_vm.background_changed.disconnect(widget.set_background)
+                self._vtk_vm.camera_reset_requested.disconnect(widget.reset_camera)
+                self._vtk_vm.view_plane_requested.disconnect(widget.set_view_plane)
+                self._vtk_vm.plane_preview_requested.disconnect(widget.update_plane_preview)
+                self._vtk_vm.plane_preview_hide_requested.disconnect(widget.hide_plane_preview)
+                self._vtk_vm.camera_apply_requested.disconnect(widget.apply_camera_state)
+                self._vtk_vm.scalar_bar_update_requested.disconnect(widget.update_scalar_bar)
+                self._vtk_vm.scalar_bar_hide_requested.disconnect(widget.hide_scalar_bar)
+                self._vtk_vm.legend_settings_changed.disconnect(widget.apply_legend_settings)
+                self.logger.info(f"Disconnected all pipeline signals for VTK tab: {tab_id}")
+            except (RuntimeError, TypeError) as e:
+                # Signal might not be connected or already disconnected
+                self.logger.debug(f"Signal disconnection info for {tab_id}: {e}")
         
         # Cleanup mapping
         if tab_id in self._tab_item_mapping:
             del self._tab_item_mapping[tab_id]
         
-        # Cleanup if needed (viewmodels will be garbage collected automatically)
+        # Unregister from PipelineViewModel
+        self._pipeline_vm.unregister_tab(tab_id)
 
     
     def _create_tab_from_menu(self, tab_type: str, default_name: str) -> None:
@@ -818,14 +931,11 @@ class MainWindow(QMainWindow):
         widget = self._get_validated_tab_widget(TabType.TABLE)
         if not widget:
             return
-            
-        data_arrays = item.get_data_arrays()
-        if not data_arrays:
+        
+        # Load all arrays from the item
+        success = widget.viewmodel.set_data_source(item.id, "POINT")
+        if not success:
             widget.clear_data()
-            return
-            
-        array_name, array_type, _ = data_arrays[0]
-        widget.viewmodel.set_data_source(item.id, array_name, array_type)
         
     def _update_graph_tab(self, item) -> None:
         """Update active graph tab with item data."""
@@ -885,4 +995,114 @@ class MainWindow(QMainWindow):
         else:
             self._clear_active_tab_display()
 
-
+    # ==================== Tab Management Handlers (From PipelineVM signals) ====================
+    
+    def _handle_vtk_view_request(self, tab_name: str) -> None:
+        """Handle VTK render view creation request from PipelineViewModel."""
+        from views.vtk_widget import VTKWidget
+        
+        # Create VTK widget
+        widget = VTKWidget()
+        
+        # Connect VTK VM signals
+        self._vtk_vm.render_requested.connect(widget.render)
+        self._vtk_vm.camera_reset_requested.connect(widget.reset_camera)
+        self._vtk_vm.plane_preview_requested.connect(widget.update_plane_preview)
+        self._vtk_vm.plane_preview_hide_requested.connect(widget.hide_plane_preview)
+        self._vtk_vm.camera_apply_requested.connect(widget.apply_camera_state)
+        self._vtk_vm.scalar_bar_update_requested.connect(widget.update_scalar_bar)
+        self._vtk_vm.scalar_bar_hide_requested.connect(widget.hide_scalar_bar)
+        self._vtk_vm.legend_settings_changed.connect(widget.apply_legend_settings)
+        self._chat_vm.render_requested.connect(widget.render)
+        
+        # Add existing pipeline actors
+        for item in self._pipeline_vm.items.values():
+            if item.actor and item.visible:
+                widget.add_actor(item.actor)
+        widget.reset_camera()
+        widget.render()
+        
+        # Add to tabbed view
+        tab_id = self._tabbed_view.add_tab_with_id(widget, "vtk", tab_name, pinned=False)
+        
+        # Register tab
+        self._pipeline_vm.register_tab(tab_id, tab_name, "vtk", pinned=False)
+        
+        # Switch to new tab
+        index = self._tabbed_view.indexOf(widget)
+        self._tabbed_view.setCurrentIndex(index)
+        
+        self.logger.info(f"VTK view created via signal: {tab_id}")
+    
+    def _handle_table_view_request(self, item_id: str, tab_name: str, array_type: str) -> None:
+        """Handle table view creation request from PipelineViewModel."""
+        from viewmodels.table_viewmodel import TableViewModel
+        from views.table_view_widget import TableViewWidget
+        
+        table_vm = TableViewModel()
+        success = table_vm.set_data_source(item_id, array_type)
+        
+        if not success:
+            self.logger.error(f"Failed to create table view for item '{item_id}'")
+            return
+        
+        widget = TableViewWidget(table_vm)
+        tab_id = self._tabbed_view.add_tab_with_id(widget, "table", tab_name, pinned=False)
+        
+        # Register tab
+        self._pipeline_vm.register_tab(tab_id, tab_name, "table", pinned=False)
+        
+        # Switch to new tab
+        index = self._tabbed_view.indexOf(widget)
+        self._tabbed_view.setCurrentIndex(index)
+        
+        self.logger.info(f"Table view created via signal: {tab_id}")
+    
+    def _handle_graph_view_request(self, graph_type: str, item_id: str, y_array: str,
+                                    x_array: str, tab_name: str, array_type: str) -> None:
+        """Handle graph view creation request from PipelineViewModel."""
+        from viewmodels.graph_viewmodel import GraphViewModel
+        from views.graph_view_widget import GraphViewWidget
+        
+        graph_vm = GraphViewModel()
+        graph_vm.set_graph_type(graph_type)
+        success = graph_vm.set_data_source(item_id, x_array, y_array, array_type)
+        
+        if not success:
+            self.logger.error(f"Failed to create graph view: data not found")
+            return
+        
+        widget = GraphViewWidget(graph_vm)
+        tab_id = self._tabbed_view.add_tab_with_id(widget, "graph", tab_name, pinned=False)
+        
+        # Register tab
+        self._pipeline_vm.register_tab(tab_id, tab_name, "graph", pinned=False)
+        
+        # Switch to new tab
+        index = self._tabbed_view.indexOf(widget)
+        self._tabbed_view.setCurrentIndex(index)
+        
+        self.logger.info(f"Graph view created via signal: {tab_id}")
+    
+    def _handle_tab_close_request(self, tab_id: str) -> None:
+        """Handle tab close request from PipelineViewModel."""
+        metadata = self._tabbed_view.get_tab_metadata(tab_id)
+        if not metadata:
+            self.logger.warning(f"Tab not found: {tab_id}")
+            return
+        
+        if metadata.get('pinned', False):
+            self.logger.warning(f"Cannot close pinned tab: {tab_id}")
+            return
+        
+        self._tabbed_view.close_tab_by_id(tab_id)
+        self.logger.info(f"Tab closed via signal: {tab_id}")
+    
+    def _handle_tab_pin_request(self, tab_id: str, pinned: bool) -> None:
+        """Handle tab pin/unpin request from PipelineViewModel."""
+        success = self._tabbed_view.set_tab_pinned(tab_id, pinned)
+        if success:
+            action = "pinned" if pinned else "unpinned"
+            self.logger.info(f"Tab {action} via signal: {tab_id}")
+        else:
+            self.logger.warning(f"Failed to modify pin status for tab: {tab_id}")

@@ -66,6 +66,8 @@ This is a scientific visualization assistant for VTK data analysis.
 
 ALLOW:
 - VTK data visualization and pipeline operations (filters, visibility, colors)
+- Creating views: render views, table views, graph views, VTK views, 3D views
+- Tab management: creating, closing, listing tabs
 - Data analysis queries about loaded data
 - Greetings ("안녕", "hi", etc.)
 - Questions about the assistant's capabilities
@@ -98,11 +100,11 @@ def create_guardrail_node(model):
         if not isinstance(last_message, HumanMessage):
             return {"blocked": False}
         
-        # Invoke the structured model
-        decision: GuardrailDecision = structured_model.invoke([
-            SystemMessage(content=GUARDRAIL_PROMPT),
-            HumanMessage(content=f"User message: {last_message.content}")
-        ])
+        # Pass all messages for full context
+        guardrail_messages = [SystemMessage(content=GUARDRAIL_PROMPT)] + list(messages)
+        
+        # Invoke the structured model with full context
+        decision: GuardrailDecision = structured_model.invoke(guardrail_messages)
         
         logger.debug(f"Guardrail decision: {decision.decision} (Reason: {decision.reason})")
         

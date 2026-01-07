@@ -15,35 +15,27 @@ class TableViewModel(QObject):
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
         self._source_item_id: Optional[str] = None
-        self._array_name: Optional[str] = None
         self._array_type: str = "POINT"  # POINT or CELL
         self._data_rows: List[List[Any]] = []
         self._column_headers: List[str] = []
-        self._component_names: List[str] = []
         
     @property
     def source_item_id(self) -> Optional[str]:
         """Get the source pipeline item ID."""
         return self._source_item_id
     
-    @property
-    def array_name(self) -> Optional[str]:
-        """Get the data array name."""
-        return self._array_name
-    
-    def set_data_source(self, item_id: str, array_name: str, array_type: str = "POINT") -> bool:
+    def set_data_source(self, item_id: str, array_type: str = "POINT") -> bool:
         """
-        Load data from a pipeline item.
+        Load ALL data arrays from a pipeline item.
         
         Parameters:
             item_id: Pipeline item ID
-            array_name: Name of the data array to display
             array_type: 'POINT' or 'CELL' data
             
         Returns:
             True if data was loaded successfully
         """
-        logger.info(f"Setting table data source: item={item_id}, array={array_name}, type={array_type}")
+        logger.info(f"Setting table data source: item={item_id}, type={array_type}")
         
         pipeline_vm = get_pipeline_viewmodel()
         if not pipeline_vm:
@@ -57,7 +49,7 @@ class TableViewModel(QObject):
         
         vtk_data = item.vtk_data
         
-        # Get the appropriate data array
+        # Get the appropriate data arrays
         if array_type == "POINT":
             data_arrays = vtk_data.GetPointData()
             num_tuples = vtk_data.GetNumberOfPoints()
@@ -65,48 +57,49 @@ class TableViewModel(QObject):
             data_arrays = vtk_data.GetCellData()
             num_tuples = vtk_data.GetNumberOfCells()
         
-        array = data_arrays.GetArray(array_name)
-        if not array:
-            logger.error(f"Array '{array_name}' not found in {array_type} data")
+        if data_arrays.GetNumberOfArrays() == 0:
+            logger.error(f"No {array_type} data arrays found")
             return False
         
         self._source_item_id = item_id
-        self._array_name = array_name
         self._array_type = array_type
         
-        # Extract data
-        num_components = array.GetNumberOfComponents()
-        
-        # Build column headers
+        # Build column headers from ALL arrays
         self._column_headers = ["Index"]
-        self._component_names = []
+        array_info = []  # (array, num_components, column_names)
         
-        if num_components == 1:
-            self._column_headers.append(array_name)
-            self._component_names.append("")
-        elif num_components == 3:
-            # Vector data
-            for suffix in ["_X", "_Y", "_Z"]:
-                self._column_headers.append(f"{array_name}{suffix}")
-                self._component_names.append(suffix)
-        else:
-            # Generic multi-component
-            for i in range(num_components):
-                self._column_headers.append(f"{array_name}_{i}")
-                self._component_names.append(f"_{i}")
+        for i in range(data_arrays.GetNumberOfArrays()):
+            array = data_arrays.GetArray(i)
+            if not array:
+                continue
+                
+            array_name = array.GetName() or f"Array_{i}"
+            num_components = array.GetNumberOfComponents()
+            
+            col_names = []
+            if num_components == 1:
+                col_names.append(array_name)
+            elif num_components == 3:
+                col_names = [f"{array_name}_X", f"{array_name}_Y", f"{array_name}_Z"]
+            else:
+                col_names = [f"{array_name}_{j}" for j in range(num_components)]
+            
+            self._column_headers.extend(col_names)
+            array_info.append((array, num_components, col_names))
         
-        # Extract rows
+        # Extract rows - iterate once through all tuples
         self._data_rows = []
         for i in range(num_tuples):
             row = [i]  # Index column
-            if num_components == 1:
-                row.append(array.GetValue(i))
-            else:
-                tuple_data = array.GetTuple(i)
-                row.extend(tuple_data)
+            for array, num_components, _ in array_info:
+                if num_components == 1:
+                    row.append(array.GetValue(i))
+                else:
+                    tuple_data = array.GetTuple(i)
+                    row.extend(tuple_data)
             self._data_rows.append(row)
         
-        logger.info(f"Table data loaded: {len(self._data_rows)} rows, {len(self._column_headers)} columns")
+        logger.info(f"Table data loaded: {len(self._data_rows)} rows, {len(self._column_headers)} columns from {len(array_info)} arrays")
         self.data_updated.emit()
         return True
     
@@ -158,17 +151,14 @@ class TableViewModel(QObject):
     def clear(self) -> None:
         """Clear all table data."""
         self._source_item_id = None
-        self._array_name = None
         self._data_rows = []
         self._column_headers = []
-        self._component_names = []
         self.data_updated.emit()
         
     def get_info(self) -> Dict[str, Any]:
         """Get table information as a dictionary."""
         return {
             "source_item_id": self._source_item_id,
-            "array_name": self._array_name,
             "array_type": self._array_type,
             "row_count": len(self._data_rows),
             "column_count": len(self._column_headers),
