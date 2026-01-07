@@ -213,6 +213,31 @@ class GraphViewWidget(QWidget):
         else:
             QMessageBox.critical(self, "Export Failed", "Failed to export graph.")
     
-    def get_viewmodel(self) -> GraphViewModel:
-        """Get the viewmodel."""
+    @property
+    def viewmodel(self) -> GraphViewModel:
+        """Get the viewmodel instance."""
         return self._viewmodel
+
+    def clear_data(self) -> None:
+        """Clear the graph data."""
+        self._ax.clear()
+        self._ax.text(0.5, 0.5, 'No data loaded', 
+                     horizontalalignment='center',
+                     verticalalignment='center',
+                     transform=self._ax.transAxes,
+                     fontsize=14, color='gray')
+        self._ax.set_xticks([])
+        self._ax.set_yticks([])
+        self._canvas.draw()
+        self._info_label.setText("No data loaded")
+        self._export_btn.setEnabled(False)
+        self._viewmodel.clear()  # Use proper ViewModel method
+
+    def set_data_visibility(self, visible: bool) -> None:
+        """Set visibility of data (dims the graph if hidden)."""
+        opacity = 1.0 if visible else 0.3
+        self._canvas.setWindowOpacity(opacity) # Visual feedback
+        self._canvas.setEnabled(visible)
+        self._toolbar.setEnabled(visible)
+        self._info_label.setEnabled(visible)
+        self._export_btn.setEnabled(visible and self._viewmodel.get_info().get("data_points", 0) > 0)

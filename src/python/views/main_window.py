@@ -20,6 +20,7 @@ from viewmodels.time_series_manager import TimeSeriesManager
 from viewmodels.table_viewmodel import TableViewModel
 from viewmodels.graph_viewmodel import GraphViewModel
 from models.properties_context import PropertiesPanelContext
+from models.tab_types import TabType
 from utils.app_context import set_time_series_manager
 import filters
 
@@ -138,6 +139,12 @@ class MainWindow(QMainWindow):
         
         # Initialize logger
         self.logger = get_logger("MainWindow")
+        
+        # New: Tab tracking for tab-aware visualization
+        self._active_tab_id: Optional[str] = None
+        self._active_tab_type: TabType = TabType.VTK
+        self._tab_item_mapping: Dict[str, str] = {}  # {tab_id: item_id}
+        
         
         # Register TimeSeriesManager in app context for agent tool access
         set_time_series_manager(self._time_manager)
@@ -319,6 +326,10 @@ class MainWindow(QMainWindow):
             self._vtk_widget, "vtk", "3D View", pinned=True
         )
         
+        # Initialize active tab state
+        self._active_tab_id = self._default_vtk_tab_id
+        self._active_tab_type = "vtk"
+        
         main_splitter.addWidget(self._tabbed_view)
         
         self._chat_panel = ChatPanel()
@@ -392,6 +403,7 @@ class MainWindow(QMainWindow):
         # Tabbed view connections
         self._tabbed_view.tab_created.connect(self._on_tab_created)
         self._tabbed_view.tab_closed.connect(self._on_tab_closed)
+        self._tabbed_view.currentChanged.connect(self._on_tab_changed)
         
         self._time_manager.time_changed.connect(self._on_time_step_changed)
     
@@ -467,14 +479,23 @@ class MainWindow(QMainWindow):
         """Handle selection change."""
         if item:
             self._pipeline_browser.select_item(item.id)
-            self._update_properties_panel(item)
             self._info_page.setPlainText(item.get_info_string())
             self._update_time_animation_widget(item)
+            
+            # Map item to active tab
+            if self._active_tab_id:
+                self._tab_item_mapping[self._active_tab_id] = item.id
+            
+            # Update active tab display
+            if self._active_tab_type == TabType.VTK:
+                self._update_properties_panel(item)
+            elif self._active_tab_type == TabType.TABLE:
+                self._update_table_tab(item)
+            elif self._active_tab_type == TabType.GRAPH:
+                self._update_graph_tab(item)
         else:
-            self._properties_panel.set_item(None)
+            self._clear_active_tab_display()
             self._info_page.setPlainText("")
-            self._vtk_vm.hide_plane_preview()
-            self._vtk_vm.hide_scalar_bar()
             self._time_manager.set_item(None)
             self._time_animation_widget.reset()
     
@@ -485,9 +506,23 @@ class MainWindow(QMainWindow):
     def _on_visibility_changed(self, item_id: str, visible: bool) -> None:
         """Handle visibility toggle."""
         self._pipeline_vm.set_visibility(item_id, visible)
+        
+        # Update visibility in all relevant tabs or just active?
+        # User requested "pipeline의 가시화 버튼으로 열려있는 탭의 가시화가 조작됐음 좋겠어"
+        # This means all tabs displaying this item should update.
+        
+        # 1. Update VTK actors (standard behavior)
         item = self._pipeline_vm.items.get(item_id)
         if item and item.actor:
             self._vtk_vm.set_actor_visibility(item.actor, visible)
+            
+        # 2. Update Table/Graph tabs displaying this item
+        for tab_id, display_item_id in self._tab_item_mapping.items():
+            if display_item_id == item_id:
+                widget = self._tabbed_view.get_tab_widget_by_id(tab_id)
+                if hasattr(widget, "set_data_visibility"):
+                    widget.set_data_visibility(visible)
+
     
     def _on_delete_requested(self, item_id: str) -> None:
         """Handle delete request."""
@@ -540,10 +575,17 @@ class MainWindow(QMainWindow):
             if parent and parent.vtk_data:
                 parent_bounds = parent.vtk_data.GetBounds()
         
+        # Determine viewmodel based on active tab
+        viewmodel = None
+        widget = self._tabbed_view.get_active_tab_widget()
+        if widget and hasattr(widget, "viewmodel"):
+            viewmodel = widget.viewmodel
+            
         self._properties_panel.set_item(
             item, ctx.style, ctx.data_arrays, ctx.current_array, ctx.current_component,
-            ctx.scalar_visible, parent_bounds
+            ctx.scalar_visible, parent_bounds, viewmodel
         )
+
         
         self._update_scalar_bar_visibility(item, ctx.scalar_visible)
         self._update_plane_preview_visibility(item)
@@ -710,6 +752,13 @@ class MainWindow(QMainWindow):
             self._vtk_vm.legend_settings_changed.connect(widget.apply_legend_settings)
             self._chat_vm.render_requested.connect(widget.render)
             
+            # Add existing pipeline actors to the new VTK widget
+            for item in self._pipeline_vm.items.values():
+                if item.actor and item.visible:
+                    widget.add_actor(item.actor)
+            widget.reset_camera()
+            widget.render()
+            
         elif tab_type == "table":
             # Create table viewmodel and widget
             table_vm = TableViewModel()
@@ -734,7 +783,13 @@ class MainWindow(QMainWindow):
     def _on_tab_closed(self, tab_id: str) -> None:
         """Handle tab closure."""
         self.logger.info(f"Tab closed: {tab_id}")
+        
+        # Cleanup mapping
+        if tab_id in self._tab_item_mapping:
+            del self._tab_item_mapping[tab_id]
+        
         # Cleanup if needed (viewmodels will be garbage collected automatically)
+
     
     def _create_tab_from_menu(self, tab_type: str, default_name: str) -> None:
         """Create a new tab from menu action."""
@@ -748,3 +803,86 @@ class MainWindow(QMainWindow):
         
         # Trigger tab creation
         self._on_tab_created(tab_id, tab_type, tab_name)
+    
+    def _get_validated_tab_widget(self, expected_type: TabType):
+        """Get active tab widget if it matches expected type, else None."""
+        if not self._active_tab_id:
+            return None
+        widget = self._tabbed_view.get_active_tab_widget()
+        if not widget or self._active_tab_type != expected_type:
+            return None
+        return widget
+    
+    def _update_table_tab(self, item) -> None:
+        """Update active table tab with item data."""
+        widget = self._get_validated_tab_widget(TabType.TABLE)
+        if not widget:
+            return
+            
+        data_arrays = item.get_data_arrays()
+        if not data_arrays:
+            widget.clear_data()
+            return
+            
+        array_name, array_type, _ = data_arrays[0]
+        widget.viewmodel.set_data_source(item.id, array_name, array_type)
+        
+    def _update_graph_tab(self, item) -> None:
+        """Update active graph tab with item data."""
+        widget = self._get_validated_tab_widget(TabType.GRAPH)
+        if not widget:
+            return
+            
+        data_arrays = item.get_data_arrays()
+        if not data_arrays:
+            widget.clear_data()
+            return
+            
+        y_array, array_type, _ = data_arrays[0]
+        x_array = "__Index__"
+        widget.viewmodel.set_data_source(item.id, x_array, y_array, array_type)
+
+    def _clear_active_tab_display(self) -> None:
+        """Clear the display of the current active tab."""
+        if self._active_tab_type == TabType.VTK:
+            self._properties_panel.set_item(None)
+            self._vtk_vm.hide_scalar_bar()
+            self._vtk_vm.hide_plane_preview()
+        elif self._active_tab_type in (TabType.TABLE, TabType.GRAPH):
+            widget = self._tabbed_view.get_active_tab_widget()
+            if widget:
+                widget.clear_data()
+
+    def _on_tab_changed(self, index: int) -> None:
+        """Handle active tab change."""
+        if index < 0:
+            self._active_tab_id = None
+            self._active_tab_type = TabType.VTK
+            return
+            
+        widget = self._tabbed_view.widget(index)
+        metadata = self._tabbed_view.get_metadata_by_widget(widget)
+        
+        if metadata:
+            self._active_tab_id = metadata['id']
+            self._active_tab_type = metadata['type']
+            self.logger.info(f"Active tab changed: {self._active_tab_id} ({self._active_tab_type})")
+            
+            # Update overall UI for current tab
+            self._update_for_active_tab()
+    
+    def _update_for_active_tab(self) -> None:
+        """Update overall UI state based on active tab type."""
+        # Update Properties Panel mode
+        if hasattr(self, "_properties_panel"):
+            self._properties_panel.set_tab_type(self._active_tab_type)
+            
+        # If we have a selected item, ensure it's displayed in the current tab
+        selected_item = self._pipeline_vm.selected_item
+        if selected_item:
+            # Re-trigger selection change logic to update the current tab's specific view
+            self._on_selection_changed(selected_item)
+        else:
+            self._clear_active_tab_display()
+
+

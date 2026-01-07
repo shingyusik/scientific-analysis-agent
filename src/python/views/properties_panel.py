@@ -1,13 +1,16 @@
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QScrollArea, QGroupBox, 
                                QFormLayout, QHBoxLayout, QLabel, QPushButton,
                                QSlider, QSpinBox, QComboBox, QCheckBox,
-                               QDoubleSpinBox, QColorDialog)
+                               QDoubleSpinBox, QColorDialog, QStackedWidget)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from typing import Optional, List, Tuple, TYPE_CHECKING
 from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox
 from views.vtk_widget import DEFAULT_LEGEND_SETTINGS
+from views.table_properties_widget import TablePropertiesWidget
+from views.graph_properties_widget import GraphPropertiesWidget
+from models.tab_types import TabType
 
 if TYPE_CHECKING:
     from services.vtk_render_service import VTKRenderService
@@ -36,10 +39,13 @@ class PropertiesPanel(QWidget):
         self._filter_widget: Optional[QWidget] = None
         self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
         
+        self._active_tab_type: TabType = TabType.VTK  # Default
+        
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
         
+        # Action buttons (Always visible)
         btn_row = QHBoxLayout()
         btn_row.setContentsMargins(4, 4, 4, 4)
         btn_row.setSpacing(4)
@@ -88,61 +94,93 @@ class PropertiesPanel(QWidget):
         
         main_layout.addLayout(btn_row)
         
-        self._scroll = QScrollArea()
-        self._scroll.setWidgetResizable(True)
+        # Stacked widget for different property types
+        self._stacked_widget = QStackedWidget()
         
-        self._content = QWidget()
-        self._layout = QVBoxLayout(self._content)
-        self._layout.setAlignment(Qt.AlignTop)
+        # 1. VTK Properties (Scroll Area)
+        self._vtk_scroll = QScrollArea()
+        self._vtk_scroll.setWidgetResizable(True)
+        self._vtk_content = QWidget()
+        self._vtk_layout = QVBoxLayout(self._vtk_content)
+        self._vtk_layout.setAlignment(Qt.AlignTop)
+        self._vtk_scroll.setWidget(self._vtk_content)
+        self._stacked_widget.addWidget(self._vtk_scroll) # Index 0
         
-        self._scroll.setWidget(self._content)
-        main_layout.addWidget(self._scroll)
+        # 2. Table Properties
+        self._table_props = TablePropertiesWidget()
+        self._table_props_scroll = QScrollArea()
+        self._table_props_scroll.setWidgetResizable(True)
+        self._table_props_scroll.setWidget(self._table_props)
+        self._stacked_widget.addWidget(self._table_props_scroll) # Index 1
+        
+        # 3. Graph Properties
+        self._graph_props = GraphPropertiesWidget()
+        self._graph_props_scroll = QScrollArea()
+        self._graph_props_scroll.setWidgetResizable(True)
+        self._graph_props_scroll.setWidget(self._graph_props)
+        self._stacked_widget.addWidget(self._graph_props_scroll) # Index 2
+        
+        main_layout.addWidget(self._stacked_widget)
     
     def set_render_service(self, render_service: "VTKRenderService") -> None:
         """Set the render service for creating filter widgets."""
         self._render_service = render_service
     
+    def set_tab_type(self, tab_type: TabType) -> None:
+        """Switch the property interface based on tab type."""
+        self._active_tab_type = tab_type
+        if tab_type == TabType.VTK:
+            self._stacked_widget.setCurrentIndex(0)
+        elif tab_type == TabType.TABLE:
+            self._stacked_widget.setCurrentIndex(1)
+        elif tab_type == TabType.GRAPH:
+            self._stacked_widget.setCurrentIndex(2)
+            
     def set_item(self, item: Optional[PipelineItem], style: str = "Surface",
                  data_arrays: List[Tuple[str, str]] = None, 
                  current_array: str = None, current_component: str = None,
                  scalar_visible: bool = False,
-                 parent_bounds: Tuple[float, ...] = None) -> None:
-        """Set the current item to display properties for."""
+                 parent_bounds: Tuple[float, ...] = None,
+                 viewmodel = None) -> None:
+        """Set the current item and update the active property interface."""
         self._current_item = item
         self._current_style = style
         self._data_arrays = data_arrays or []
         self._parent_bounds = parent_bounds
-        self._rebuild_ui(current_array, current_component, scalar_visible)
+        
+        # Update universal buttons
+        self._delete_btn.setEnabled(item is not None)
+        self._apply_btn.setEnabled(item is not None and "filter" in item.item_type)
+        
+        if self._active_tab_type == TabType.VTK:
+            self._rebuild_vtk_ui(current_array, current_component, scalar_visible)
+        elif self._active_tab_type == TabType.TABLE:
+            self._table_props.set_item(item, viewmodel)
+        elif self._active_tab_type == TabType.GRAPH:
+            self._graph_props.set_item(item, viewmodel)
     
-    def _clear_layout(self) -> None:
-        """Clear all widgets from the layout."""
-        while self._layout.count():
-            child = self._layout.takeAt(0)
+    def _clear_vtk_layout(self) -> None:
+        """Clear all widgets from the VTK layout."""
+        while self._vtk_layout.count():
+            child = self._vtk_layout.takeAt(0)
             if child.widget():
                 child.widget().deleteLater()
     
-    def _rebuild_ui(self, current_array: str = None, current_component: str = None, 
+    def _rebuild_vtk_ui(self, current_array: str = None, current_component: str = None, 
                     scalar_visible: bool = False) -> None:
-        """Rebuild the properties UI for current item."""
-        self._clear_layout()
+        """Rebuild the VTK properties UI."""
+        self._clear_vtk_layout()
         self._filter_widget = None
         
         if not self._current_item:
-            self._apply_btn.setEnabled(False)
-            self._delete_btn.setEnabled(False)
-            self._layout.addWidget(QLabel("No item selected."))
+            self._vtk_layout.addWidget(QLabel("No item selected."))
             return
         
         item = self._current_item
         
         if not item.actor:
-            self._apply_btn.setEnabled(False)
-            self._delete_btn.setEnabled(False)
-            self._layout.addWidget(QLabel("No styling properties available for this source."))
+            self._vtk_layout.addWidget(QLabel("No 3D styling available for this source."))
             return
-        
-        self._apply_btn.setEnabled("filter" in item.item_type)
-        self._delete_btn.setEnabled(True)
         
         if self._data_arrays:
             self._add_color_by_section(current_array, current_component, scalar_visible)
@@ -156,7 +194,7 @@ class PropertiesPanel(QWidget):
         if "filter" in item.item_type:
             self._add_filter_params_section(item)
         
-        self._layout.addStretch()
+        self._vtk_layout.addStretch()
     
     def _add_filter_params_section(self, item: PipelineItem) -> None:
         """Add filter parameters section using the filter registry."""
@@ -172,15 +210,15 @@ class PropertiesPanel(QWidget):
             self.filter_params_changed.emit(item_id, params)
         
         widget = filter_instance.create_params_widget(
-            self._content, item, self._parent_bounds, on_params_changed
+            self._vtk_content, item, self._parent_bounds, on_params_changed
         )
         
         if widget:
             self._filter_widget = widget
-            self._layout.addWidget(widget)
+            self._vtk_layout.addWidget(widget)
     
     def _add_color_by_section(self, current_array: str, current_component: str, 
-                              scalar_visible: bool) -> None:
+                               scalar_visible: bool) -> None:
         """Add color by dropdown with vector component selection."""
         group = QGroupBox("Color By")
         layout = QHBoxLayout(group)
@@ -266,7 +304,7 @@ class PropertiesPanel(QWidget):
         
         layout.addWidget(main_combo)
         layout.addWidget(component_combo)
-        self._layout.addWidget(group)
+        self._vtk_layout.addWidget(group)
     
     def _on_apply_clicked(self) -> None:
         """Handle apply button click."""
@@ -292,7 +330,7 @@ class PropertiesPanel(QWidget):
         elif self._current_style == "Point Gaussian":
             self._add_gaussian_scale_control(layout)
         
-        self._layout.addWidget(group)
+        self._vtk_layout.addWidget(group)
     
     def _add_opacity_control(self, layout: QFormLayout) -> None:
         """Add opacity slider and spinbox."""
@@ -524,7 +562,7 @@ class PropertiesPanel(QWidget):
         self._width_spin.valueChanged.connect(self._on_legend_pos_size_changed)
         self._height_spin.valueChanged.connect(self._on_legend_pos_size_changed)
         
-        self._layout.addWidget(group)
+        self._vtk_layout.addWidget(group)
     
     def _reset_font_color(self) -> None:
         """Reset font color to default."""

@@ -396,3 +396,27 @@ class TabbedViewWidget(QTabWidget):
         
         self._toggle_pin(tab_id, metadata["pinned"])
         return True
+
+    def get_active_tab_widget(self) -> Optional[QWidget]:
+        """Get the widget of the currently active tab."""
+        index = self.currentIndex()
+        if index < 0:
+            return None
+        return self.widget(index)
+
+    def get_tab_widget_by_id(self, tab_id: str) -> Optional[QWidget]:
+        """Get widget for a specific tab ID."""
+        metadata = self._tab_metadata.get(tab_id)
+        if metadata:
+            return metadata["widget"]
+        return None
+
+    def get_metadata_by_widget(self, widget: QWidget) -> Optional[Dict]:
+        """Get metadata for a specific widget."""
+        for tab_id, metadata in self._tab_metadata.items():
+            if metadata["widget"] == widget:
+                # Add ID to metadata for convenience
+                result = metadata.copy()
+                result["id"] = tab_id
+                return result
+        return None

@@ -93,4 +93,34 @@ class PipelineItem:
                 lines.append(f"Error extracting info: {e}")
         
         return "\n".join(lines)
-
+    
+    def get_data_arrays(self) -> List[Tuple[str, str, int]]:
+        """
+        Get list of available data arrays from VTK data.
+        
+        Returns:
+            List of tuples: (array_name, array_type, num_components)
+            where array_type is 'POINT' or 'CELL'
+        """
+        arrays = []
+        if not self.vtk_data:
+            return arrays
+            
+        try:
+            # Point data arrays
+            pt_data = self.vtk_data.GetPointData()
+            for i in range(pt_data.GetNumberOfArrays()):
+                arr = pt_data.GetArray(i)
+                if arr:
+                    arrays.append((arr.GetName(), "POINT", arr.GetNumberOfComponents()))
+            
+            # Cell data arrays
+            cell_data = self.vtk_data.GetCellData()
+            for i in range(cell_data.GetNumberOfArrays()):
+                arr = cell_data.GetArray(i)
+                if arr:
+                    arrays.append((arr.GetName(), "CELL", arr.GetNumberOfComponents()))
+        except Exception:
+            pass
+            
+        return arrays

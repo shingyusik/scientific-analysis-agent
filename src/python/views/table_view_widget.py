@@ -147,6 +147,23 @@ class TableViewWidget(QWidget):
         else:
             QMessageBox.critical(self, "Export Failed", "Failed to export table data.")
     
-    def get_viewmodel(self) -> TableViewModel:
-        """Get the viewmodel."""
+    @property
+    def viewmodel(self) -> TableViewModel:
+        """Get the viewmodel instance."""
         return self._viewmodel
+
+    def clear_data(self) -> None:
+        """Clear the table data."""
+        self._table.setRowCount(0)
+        self._table.setColumnCount(0)
+        self._info_label.setText("No data loaded")
+        self._export_btn.setEnabled(False)
+        self._viewmodel.clear()  # Use proper ViewModel method
+
+    def set_data_visibility(self, visible: bool) -> None:
+        """Set visibility of data (dims the table if hidden)."""
+        opacity = 1.0 if visible else 0.3
+        self._table.setWindowOpacity(opacity) # Visual feedback
+        self._table.setEnabled(visible)
+        self._info_label.setEnabled(visible)
+        self._export_btn.setEnabled(visible and self._viewmodel.get_row_count() > 0)
