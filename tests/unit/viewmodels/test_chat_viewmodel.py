@@ -19,6 +19,7 @@ def chat_vm(qapp):
             mock_create_agent.return_value = mock_agent
             
             vm = ChatViewModel(pipeline_vm, vtk_vm)
+            vm.initialize_agent() # Initialize agent for tests
             yield vm
 
 def test_initial_state(chat_vm):
