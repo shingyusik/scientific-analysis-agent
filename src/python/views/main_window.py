@@ -19,9 +19,10 @@ from viewmodels.chat_viewmodel import ChatViewModel
 from viewmodels.time_series_manager import TimeSeriesManager
 from viewmodels.table_viewmodel import TableViewModel
 from viewmodels.graph_viewmodel import GraphViewModel
+from viewmodels.tab_manager_viewmodel import TabManagerViewModel
 from models.properties_context import PropertiesPanelContext
 from models.tab_types import TabType
-from utils.app_context import set_time_series_manager
+from utils.app_context import set_time_series_manager, set_tab_manager_viewmodel
 import filters
 
 
@@ -136,6 +137,7 @@ class MainWindow(QMainWindow):
         self._vtk_vm = vtk_vm
         self._chat_vm = chat_vm
         self._time_manager = TimeSeriesManager(self)
+        self._tab_vm = TabManagerViewModel() # Added TabManagerViewModel
         
         # Initialize logger
         self.logger = get_logger("MainWindow")
@@ -404,14 +406,16 @@ class MainWindow(QMainWindow):
         # Tabbed view connections
         self._tabbed_view.tab_created.connect(self._on_tab_created)
         self._tabbed_view.tab_closed.connect(self._on_tab_closed)
+        self._tabbed_view.tab_pinned.connect(self._on_tab_pinned)
+        self._tabbed_view.tab_renamed.connect(self._on_tab_renamed)
         self._tabbed_view.currentChanged.connect(self._on_tab_changed)
         
-        # Tab management signals from PipelineViewModel (for LLM tools)
-        self._pipeline_vm.vtk_view_requested.connect(self._handle_vtk_view_request)
-        self._pipeline_vm.table_view_requested.connect(self._handle_table_view_request)
-        self._pipeline_vm.graph_view_requested.connect(self._handle_graph_view_request)
-        self._pipeline_vm.tab_close_requested.connect(self._handle_tab_close_request)
-        self._pipeline_vm.tab_pin_requested.connect(self._handle_tab_pin_request)
+        # Tab management signals from TabManagerViewModel (for LLM tools)
+        self._tab_vm.vtk_view_requested.connect(self._handle_vtk_view_request)
+        self._tab_vm.table_view_requested.connect(self._handle_table_view_request)
+        self._tab_vm.graph_view_requested.connect(self._handle_graph_view_request)
+        self._tab_vm.tab_close_requested.connect(self._handle_tab_close_request)
+        self._tab_vm.tab_pin_requested.connect(self._handle_tab_pin_request)
         
         self._time_manager.time_changed.connect(self._on_time_step_changed)
     
@@ -862,8 +866,8 @@ class MainWindow(QMainWindow):
             index = self._tabbed_view.indexOf(widget)
             self._tabbed_view.setCurrentIndex(index)
             
-            # Register tab in PipelineViewModel
-            self._pipeline_vm.register_tab(actual_tab_id, tab_name, tab_type, pinned=False)
+            # Register tab in TabManagerViewModel
+            self._tab_vm.register_tab(actual_tab_id, tab_name, tab_type, pinned=False)
             
             self.logger.info(f"Tab created successfully: {actual_tab_id}")
         else:
@@ -900,8 +904,19 @@ class MainWindow(QMainWindow):
         if tab_id in self._tab_item_mapping:
             del self._tab_item_mapping[tab_id]
         
-        # Unregister from PipelineViewModel
-        self._pipeline_vm.unregister_tab(tab_id)
+        # Unregister from TabManagerViewModel
+        self._tab_vm.unregister_tab(tab_id)
+
+    
+    def _on_tab_pinned(self, tab_id: str, pinned: bool) -> None:
+        """Handle tab pin status change."""
+        self._tab_vm.update_tab_pin_status(tab_id, pinned)
+        self.logger.info(f"Tab pin status synced to VM: {tab_id}={pinned}")
+
+    def _on_tab_renamed(self, tab_id: str, new_name: str) -> None:
+        """Handle tab rename."""
+        self._tab_vm.update_tab_name(tab_id, new_name)
+        self.logger.info(f"Tab rename synced to VM: {tab_id}={new_name}")
 
     
     def _create_tab_from_menu(self, tab_type: str, default_name: str) -> None:
@@ -1026,7 +1041,7 @@ class MainWindow(QMainWindow):
         tab_id = self._tabbed_view.add_tab_with_id(widget, "vtk", tab_name, pinned=False)
         
         # Register tab
-        self._pipeline_vm.register_tab(tab_id, tab_name, "vtk", pinned=False)
+        self._tab_vm.register_tab(tab_id, tab_name, "vtk", pinned=False)
         
         # Switch to new tab
         index = self._tabbed_view.indexOf(widget)
@@ -1050,7 +1065,7 @@ class MainWindow(QMainWindow):
         tab_id = self._tabbed_view.add_tab_with_id(widget, "table", tab_name, pinned=False)
         
         # Register tab
-        self._pipeline_vm.register_tab(tab_id, tab_name, "table", pinned=False)
+        self._tab_vm.register_tab(tab_id, tab_name, "table", pinned=False)
         
         # Switch to new tab
         index = self._tabbed_view.indexOf(widget)
@@ -1076,7 +1091,7 @@ class MainWindow(QMainWindow):
         tab_id = self._tabbed_view.add_tab_with_id(widget, "graph", tab_name, pinned=False)
         
         # Register tab
-        self._pipeline_vm.register_tab(tab_id, tab_name, "graph", pinned=False)
+        self._tab_vm.register_tab(tab_id, tab_name, "graph", pinned=False)
         
         # Switch to new tab
         index = self._tabbed_view.indexOf(widget)
