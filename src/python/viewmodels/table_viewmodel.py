@@ -19,6 +19,7 @@ class TableViewModel(QObject):
         super().__init__(parent)
         self._source_item_id: Optional[str] = None
         self._array_type: str = "POINT"  # POINT or CELL
+        self._is_visible: bool = True
         self._data_rows: List[List[Any]] = []
         self._column_headers: List[str] = []
         
@@ -26,18 +27,32 @@ class TableViewModel(QObject):
     def source_item_id(self) -> Optional[str]:
         """Get the source pipeline item ID."""
         return self._source_item_id
+        
+    def set_visibility(self, visible: bool) -> None:
+        """Set the visibility of the table data."""
+        if self._is_visible == visible:
+            return
+            
+        self._is_visible = visible
+        if visible:
+            self.refresh_data()
+        else:
+            # Clear data visual but keep configuration
+            self._data_rows = []
+            self.data_updated.emit()
     
     def set_data_source(self, item_id: str, array_type: str = "POINT") -> bool:
         """
         Load ALL data arrays from a pipeline item.
-        
-        Parameters:
-            item_id: Pipeline item ID
-            array_type: 'POINT' or 'CELL' data
-            
-        Returns:
-            True if data was loaded successfully
         """
+        self._source_item_id = item_id
+        self._array_type = array_type
+        
+        if not self._is_visible:
+            self._data_rows = []
+            self.data_updated.emit()
+            return True
+
         logger.info(f"Setting table data source: item={item_id}, type={array_type}")
         
         pipeline_vm = get_pipeline_viewmodel()
@@ -63,9 +78,6 @@ class TableViewModel(QObject):
         if data_arrays.GetNumberOfArrays() == 0:
             logger.error(f"No {array_type} data arrays found")
             return False
-        
-        self._source_item_id = item_id
-        self._array_type = array_type
         
         # Build column headers and collect data arrays
         self._column_headers = ["Index"]
@@ -106,7 +118,6 @@ class TableViewModel(QObject):
             # Use column_stack to create the matrix
             full_data = np.column_stack(cols_data)
             # Convert to list of lists for compatibility with existing view logic
-            # (Note: In a pure optimized version, we would keep it as numpy and update the view to handle it)
             self._data_rows = full_data.tolist()
         else:
             self._data_rows = [[x] for x in cols_data[0]]
@@ -114,6 +125,12 @@ class TableViewModel(QObject):
         logger.info(f"Table data loaded (Optimized): {len(self._data_rows)} rows, {len(self._column_headers)} columns")
         self.data_updated.emit()
         return True
+        
+    def refresh_data(self) -> bool:
+        """Reload data using current configuration."""
+        if not self._source_item_id:
+            return False
+        return self.set_data_source(self._source_item_id, self._array_type)
     
     def get_table_data(self) -> List[List[Any]]:
         """Return table rows (including index column)."""

@@ -8,4 +8,9 @@
 - 이미지 input
 - context window 남은 양 확인 바
 - vtk render view llm에 넘기기 (이미지 input)
-- 탭 기능 상세 리뷰
+- 탭 기능 상세 리뷰    
+    - 랜더 탭에 나머지 properties 추가
+    - time series도 탭에 잘 반영되는지 보기
+- subplot
+- 3d plot (contour)
+- heatmap

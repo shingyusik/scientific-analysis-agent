@@ -150,7 +150,11 @@ class PropertiesPanel(QWidget):
         
         # Update universal buttons
         self._delete_btn.setEnabled(item is not None)
-        self._apply_btn.setEnabled(item is not None and "filter" in item.item_type)
+        # Apply button is enabled for Filter (VTK mode) or Graph/Table modes
+        if self._active_tab_type == TabType.VTK:
+             self._apply_btn.setEnabled(item is not None and "filter" in item.item_type)
+        else:
+             self._apply_btn.setEnabled(item is not None)
         
         if self._active_tab_type == TabType.VTK:
             self._rebuild_vtk_ui(current_array, current_component, scalar_visible)
@@ -308,8 +312,20 @@ class PropertiesPanel(QWidget):
     
     def _on_apply_clicked(self) -> None:
         """Handle apply button click."""
-        if self._current_item:
+        if not self._current_item:
+            return
+            
+        if self._active_tab_type == TabType.VTK:
             self.apply_filter_requested.emit(self._current_item.id)
+        elif self._active_tab_type == TabType.GRAPH:
+            # Delegate to graph widget
+            self._graph_props.apply_changes()
+        elif self._active_tab_type == TabType.TABLE:
+            # Table updates immediately for now, but if we add features this might change
+            # However, user expected manual update.
+            # TablePropertiesWidget currently updates on combo change.
+            # Let's leave it as is for Table unless asked.
+            pass
     
     def _on_delete_clicked(self) -> None:
         """Handle delete button click."""

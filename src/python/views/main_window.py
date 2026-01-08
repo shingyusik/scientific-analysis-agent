@@ -582,12 +582,16 @@ class MainWindow(QMainWindow):
                 self._tab_item_mapping[self._active_tab_id] = item.id
             
             # Update active tab display
+            # Update active tab display
             if self._active_tab_type == TabType.VTK:
-                self._update_properties_panel(item)
+                pass # Already handled by Properties Panel update
             elif self._active_tab_type == TabType.TABLE:
                 self._update_table_tab(item)
             elif self._active_tab_type == TabType.GRAPH:
                 self._update_graph_tab(item)
+            
+            # Always update properties panel
+            self._update_properties_panel(item)
         else:
             self._clear_active_tab_display()
             self._info_page.setPlainText("")
@@ -602,21 +606,32 @@ class MainWindow(QMainWindow):
         """Handle visibility toggle."""
         self._pipeline_vm.set_visibility(item_id, visible)
         
-        # Update visibility in all relevant tabs or just active?
-        # User requested "pipeline의 가시화 버튼으로 열려있는 탭의 가시화가 조작됐음 좋겠어"
-        # This means all tabs displaying this item should update.
-        
-        # 1. Update VTK actors (standard behavior)
+        # 1. Update VTK actors
         item = self._pipeline_vm.items.get(item_id)
         if item and item.actor:
             self._vtk_vm.set_actor_visibility(item.actor, visible)
             
-        # 2. Update Table/Graph tabs displaying this item
-        for tab_id, display_item_id in self._tab_item_mapping.items():
-            if display_item_id == item_id:
-                widget = self._tabbed_view.get_tab_widget_by_id(tab_id)
-                if hasattr(widget, "set_data_visibility"):
-                    widget.set_data_visibility(visible)
+        # 2. Update all relevant Tabs
+        all_tabs = self._tabbed_view.get_all_tabs()
+        for tab_id, meta in all_tabs.items():
+            widget = self._tabbed_view.get_tab_widget_by_id(tab_id)
+            if not widget:
+                continue
+                
+            if meta['type'] == 'graph':
+                # For Graph: Show/Hide based on visibility
+                if hasattr(widget, 'viewmodel'):
+                    if visible:
+                        widget.viewmodel.add_data_source(item_id)
+                    else:
+                        # Just trigger redraw (rendering will skip hidden items)
+                        widget.viewmodel.plot_config_updated.emit()
+                        
+            elif meta['type'] == 'table':
+                # For Table: Only if it's the source item
+                if hasattr(widget, 'viewmodel') and widget.viewmodel.source_item_id == item_id:
+                    if hasattr(widget.viewmodel, 'set_visibility'):
+                        widget.viewmodel.set_visibility(visible)
 
     
     def _on_delete_requested(self, item_id: str) -> None:
@@ -951,26 +966,36 @@ class MainWindow(QMainWindow):
         widget = self._get_validated_tab_widget(TabType.TABLE)
         if not widget:
             return
-        
+            
+        # Check if already viewing this item
+        if widget.viewmodel.source_item_id == item.id:
+            widget.viewmodel.set_visibility(item.visible)
+            if item.visible:
+                widget.viewmodel.refresh_data()
+            return
+
+        # Initialize with current visibility
+        if hasattr(widget.viewmodel, 'set_visibility'):
+            widget.viewmodel.set_visibility(item.visible)
+            
         # Load all arrays from the item
         success = widget.viewmodel.set_data_source(item.id, "POINT")
         if not success:
             widget.clear_data()
         
     def _update_graph_tab(self, item) -> None:
-        """Update active graph tab with item data."""
+        """Update active graph tab with ALL visible items."""
         widget = self._get_validated_tab_widget(TabType.GRAPH)
         if not widget:
             return
             
-        data_arrays = item.get_data_arrays()
-        if not data_arrays:
-            widget.clear_data()
-            return
-            
-        y_array, array_type, _ = data_arrays[0]
-        x_array = "__Index__"
-        widget.viewmodel.set_data_source(item.id, x_array, y_array, array_type)
+        # Sync graph with all visible items in the pipeline
+        for pid, pitem in self._pipeline_vm.items.items():
+            if pitem.visible:
+                # Add or update data source
+                widget.viewmodel.add_data_source(pid)
+            # Do NOT remove hidden items to preserve config
+            # But the ViewModel rendering won't show them due to our visibility check override
 
     def _clear_active_tab_display(self) -> None:
         """Clear the display of the current active tab."""

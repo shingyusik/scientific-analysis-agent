@@ -20,27 +20,24 @@ class GraphViewModel(QObject):
     def __init__(self, parent: QObject = None):
         super().__init__(parent)
         self._graph_type: str = "line"
-        self._source_item_id: Optional[str] = None
-        self._x_array_name: Optional[str] = None
-        self._y_array_name: Optional[str] = None
-        self._array_type: str = "POINT"  # POINT or CELL
-        self._x_component: int = 0  # For vector data
-        self._y_component: int = 0
         
-        # Plot styling
+        # New: Store multiple data sources
+        # Key: item_id, Value: dict with data and config
+        self._data_sources: Dict[str, Any] = {}
+        
+        # Current active item for property editing (optional, or handled by UI)
+        # We might not need to store "current" here if UI passes it. 
+        # But for 'set_data_source' backward compatibility, we'll need to know.
+        
+        # Plot styling (Global)
         self._title: str = ""
         self._x_label: str = "X"
         self._y_label: str = "Y"
         self._show_grid: bool = True
         self._show_legend: bool = True
-        self._line_color: str = "blue"
-        self._line_width: float = 1.5
-        self._marker_style: str = "o"
-        self._marker_size: float = 5.0
         
-        # Cached data
-        self._x_data: Optional[np.ndarray] = None
-        self._y_data: Optional[np.ndarray] = None
+        # Styling defaults
+        self._default_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b']
         
     @property
     def graph_type(self) -> str:
@@ -48,103 +45,184 @@ class GraphViewModel(QObject):
         return self._graph_type
     
     def set_graph_type(self, graph_type: str) -> bool:
-        """
-        Set graph type.
-        
-        Parameters:
-            graph_type: One of GRAPH_TYPES
-            
-        Returns:
-            True if type was set successfully
-        """
+        """Set graph type (Global)."""
         if graph_type not in self.GRAPH_TYPES:
-            logger.error(f"Invalid graph type: {graph_type}. Must be one of {self.GRAPH_TYPES}")
+            logger.error(f"Invalid graph type: {graph_type}")
             return False
-        
         self._graph_type = graph_type
         logger.info(f"Graph type set to: {graph_type}")
         self.plot_config_updated.emit()
         return True
     
-    def set_data_source(
+    def add_data_source(
         self,
         item_id: str,
-        x_array: str,
-        y_array: str,
-        array_type: str = "POINT",
-        x_component: int = 0,
-        y_component: int = 0
+        x_array: str = None,
+        y_array: str = None,
+        array_type: str = None,
+        x_component: int = None,
+        y_component: int = None,
+        line_color: str = None,
+        line_width: float = None,
+        marker_style: str = None,
+        marker_size: float = None
     ) -> bool:
-        """
-        Configure data source for the graph.
-        
-        Parameters:
-            item_id: Pipeline item ID
-            x_array: Name of X-axis data array
-            y_array: Name of Y-axis data array
-            array_type: 'POINT' or 'CELL' data
-            x_component: Component index for X (if vector)
-            y_component: Component index for Y (if vector)
-            
-        Returns:
-            True if data was loaded successfully
-        """
-        logger.info(f"Setting graph data source: item={item_id}, x={x_array}, y={y_array}")
+        """Add or update a data source."""
+        logger.info(f"Adding/Updating graph source: {item_id}")
         
         pipeline_vm = get_pipeline_viewmodel()
         if not pipeline_vm:
-            logger.error("Pipeline ViewModel not available in app context")
             return False
         
         item = pipeline_vm.items.get(item_id)
         if not item or not item.vtk_data:
-            logger.error(f"Item {item_id} not found or has no VTK data")
+            logger.error(f"Item {item_id} not valid")
             return False
+            
+        # Get existing config if available
+        existing = self._data_sources.get(item_id)
         
+        # --- Resolve Parameters (Merge incoming with existing or defaults) ---
+        
+        # 1. Arrays & Data Type
+        if y_array is None:
+            if existing:
+                y_array = existing["y_array"]
+                # If reusing Y, reuse Type too unless specified
+                if array_type is None: array_type = existing["array_type"]
+            else:
+                # Default for new source: Pick first available
+                data_arrays = item.get_data_arrays()
+                if data_arrays:
+                    y_array = data_arrays[0][0]
+                    if array_type is None: array_type = data_arrays[0][1]
+                else:
+                    logger.error("No data arrays found")
+                    return False
+        
+        # If array_type is still None (and not set by logic above), default to POINT
+        if array_type is None:
+            array_type = "POINT"
+            
+        if x_array is None:
+            x_array = existing["x_array"] if existing else "__Index__"
+            
+        if x_component is None:
+            x_component = existing["x_component"] if existing else 0
+            
+        if y_component is None:
+            y_component = existing["y_component"] if existing else 0
+
+        # 2. Styling
+        if line_color is None:
+            if existing:
+                line_color = existing["line_color"]
+            else:
+                # New source: Cycle colors
+                idx = len(self._data_sources) % len(self._default_colors)
+                line_color = self._default_colors[idx]
+        
+        if line_width is None:
+            line_width = existing["line_width"] if existing else 1.5
+            
+        if marker_style is None:
+            marker_style = existing["marker_style"] if existing else "o"
+            
+        if marker_size is None:
+            marker_size = existing["marker_size"] if existing else 5.0
+
+        # --- Load Data ---
         vtk_data = item.vtk_data
-        
-        # Get the appropriate data arrays
         if array_type == "POINT":
-            data_arrays = vtk_data.GetPointData()
+            data_provider = vtk_data.GetPointData()
             num_tuples = vtk_data.GetNumberOfPoints()
-        else:  # CELL
-            data_arrays = vtk_data.GetCellData()
-            num_tuples = vtk_data.GetNumberOfCells()
-        
-        # Extract X data
-        if x_array == "__Index__":
-            self._x_data = np.arange(num_tuples)
         else:
-            x_vtk_array = data_arrays.GetArray(x_array)
-            if not x_vtk_array:
-                logger.error(f"X array '{x_array}' not found")
+            data_provider = vtk_data.GetCellData()
+            num_tuples = vtk_data.GetNumberOfCells()
+
+        # Extract X
+        if x_array == "__Index__":
+            x_data = np.arange(num_tuples)
+        else:
+            x_vtk = data_provider.GetArray(x_array)
+            if not x_vtk: 
                 return False
-            self._x_data = self._extract_component(x_vtk_array, x_component, num_tuples)
-        
-        # Extract Y data
-        y_vtk_array = data_arrays.GetArray(y_array)
-        if not y_vtk_array:
-            logger.error(f"Y array '{y_array}' not found")
+            x_data = self._extract_component(x_vtk, x_component, num_tuples)
+            
+        # Extract Y
+        y_vtk = data_provider.GetArray(y_array)
+        if not y_vtk:
             return False
-        self._y_data = self._extract_component(y_vtk_array, y_component, num_tuples)
+        y_data = self._extract_component(y_vtk, y_component, num_tuples)
+            
+        # Store
+        self._data_sources[item_id] = {
+            "x_array": x_array,
+            "y_array": y_array,
+            "array_type": array_type,
+            "x_component": x_component,
+            "y_component": y_component,
+            "x_data": x_data,
+            "y_data": y_data,
+            "line_color": line_color,
+            "line_width": line_width,
+            "marker_style": marker_style,
+            "marker_size": marker_size
+        }
         
-        # Store configuration
-        self._source_item_id = item_id
-        self._x_array_name = x_array
-        self._y_array_name = y_array
-        self._array_type = array_type
-        self._x_component = x_component
-        self._y_component = y_component
+        # Update global labels if empty (only for first source usually)
+        if not self._y_label or self._y_label == "Y":
+             self._y_label = y_array
         
-        # Update default labels if not customized
-        if self._x_label == "X" or not self._x_label:
-            self._x_label = x_array if x_array != "__Index__" else "Index"
-        if self._y_label == "Y" or not self._y_label:
-            self._y_label = y_array
-        
-        logger.info(f"Graph data loaded: {len(self._x_data)} points")
         self.plot_config_updated.emit()
         return True
+
+    def remove_data_source(self, item_id: str) -> None:
+        """Remove a data source."""
+        if item_id in self._data_sources:
+            del self._data_sources[item_id]
+            self.plot_config_updated.emit()
+
+    def set_data_source(self, item_id: str, x_array: str, y_array: str, array_type: str = "POINT", x_component: int = 0, y_component: int = 0) -> bool:
+        """Legacy compatibility wrapper / Update specific source."""
+        # Preserve existing style if present
+        style_args = {}
+        if item_id in self._data_sources:
+            src = self._data_sources[item_id]
+            style_args = {
+                "line_color": src.get("line_color"),
+                "line_width": src.get("line_width"),
+                "marker_style": src.get("marker_style"),
+                "marker_size": src.get("marker_size")
+            }
+            
+        return self.add_data_source(item_id, x_array, y_array, array_type, x_component, y_component, **style_args)
+        
+    def refresh_data(self) -> bool:
+        """Reload data using current configuration for all sources."""
+        if not self._data_sources:
+            return False
+            
+        success_any = False
+        # Create a copy of keys to avoid modification during iteration issues if any
+        for item_id in list(self._data_sources.keys()):
+            src = self._data_sources[item_id]
+            # Re-add uses the stored config to re-fetch data
+            if self.add_data_source(
+                item_id, 
+                src["x_array"], 
+                src["y_array"], 
+                src["array_type"],
+                src["x_component"],
+                src["y_component"],
+                src["line_color"],
+                src["line_width"],
+                src["marker_style"],
+                src["marker_size"]
+            ):
+                success_any = True
+                
+        return success_any
     
     def _extract_component(self, vtk_array, component: int, num_tuples: int) -> np.ndarray:
         """Extract a single component from a VTK array."""
@@ -158,7 +236,10 @@ class GraphViewModel(QObject):
                 return np_array
             else:
                 # Vector/tensor data - extract specific component using numpy slicing
-                if component < 0 or component >= num_components:
+                if component == -1:
+                    # Magnitude
+                    return np.linalg.norm(np_array, axis=1)
+                elif component < 0 or component >= num_components:
                     logger.warning(f"Invalid component index {component} for array with {num_components} components")
                     return np.zeros(num_tuples)
                 return np_array[:, component]
@@ -166,27 +247,40 @@ class GraphViewModel(QObject):
             logger.error(f"Error extracting component: {e}")
             return np.zeros(num_tuples)
     
-    def get_plot_config(self) -> Dict[str, Any]:
+    def get_plot_config(self, item_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Return matplotlib plot configuration.
-        
-        Returns:
-            Dictionary with plot parameters
+        If item_id provided, returns series-specific config.
+        Otherwise returns global config.
         """
-        return {
+        config = {
             "graph_type": self._graph_type,
-            "x_data": self._x_data,
-            "y_data": self._y_data,
             "title": self._title,
             "x_label": self._x_label,
             "y_label": self._y_label,
             "show_grid": self._show_grid,
             "show_legend": self._show_legend,
-            "line_color": self._line_color,
-            "line_width": self._line_width,
-            "marker_style": self._marker_style,
-            "marker_size": self._marker_size,
         }
+        
+        if item_id and item_id in self._data_sources:
+            src = self._data_sources[item_id]
+            config.update({
+                "x_array": src["x_array"],
+                "y_array": src["y_array"],
+                "array_type": src["array_type"],
+                "x_component": src["x_component"],
+                "y_component": src["y_component"],
+                "line_color": src["line_color"],
+                "line_width": src["line_width"],
+                "marker_style": src["marker_style"],
+                "marker_size": src["marker_size"]
+            })
+        elif self._data_sources:
+             # Fallback: ignore series specific if not requested or return first?
+             # Properties panels might fail without keys.
+             pass
+             
+        return config
     
     def set_plot_style(
         self,
@@ -198,41 +292,29 @@ class GraphViewModel(QObject):
         line_color: Optional[str] = None,
         line_width: Optional[float] = None,
         marker_style: Optional[str] = None,
-        marker_size: Optional[float] = None
+        marker_size: Optional[float] = None,
+        item_id: Optional[str] = None  # New: Target specific series
     ) -> None:
         """Update plot styling parameters."""
-        if title is not None:
-            self._title = title
-        if x_label is not None:
-            self._x_label = x_label
-        if y_label is not None:
-            self._y_label = y_label
-        if show_grid is not None:
-            self._show_grid = show_grid
-        if show_legend is not None:
-            self._show_legend = show_legend
-        if line_color is not None:
-            self._line_color = line_color
-        if line_width is not None:
-            self._line_width = line_width
-        if marker_style is not None:
-            self._marker_style = marker_style
-        if marker_size is not None:
-            self._marker_size = marker_size
+        # Global settings
+        if title is not None: self._title = title
+        if x_label is not None: self._x_label = x_label
+        if y_label is not None: self._y_label = y_label
+        if show_grid is not None: self._show_grid = show_grid
+        if show_legend is not None: self._show_legend = show_legend
+        
+        # Series settings
+        if item_id and item_id in self._data_sources:
+            src = self._data_sources[item_id]
+            if line_color is not None: src["line_color"] = line_color
+            if line_width is not None: src["line_width"] = line_width
+            if marker_style is not None: src["marker_style"] = marker_style
+            if marker_size is not None: src["marker_size"] = marker_size
         
         self.plot_config_updated.emit()
     
     def export_to_image(self, file_path: str, dpi: int = 150) -> bool:
-        """
-        Export graph to image file.
-        
-        Parameters:
-            file_path: Output file path (.png, .jpg, .svg, .pdf)
-            dpi: Resolution in dots per inch
-            
-        Returns:
-            True if export succeeded
-        """
+        """Export graph to image file."""
         try:
             import matplotlib.pyplot as plt
             
@@ -251,32 +333,46 @@ class GraphViewModel(QObject):
     
     def _render_plot(self, ax) -> None:
         """Render the plot on a matplotlib axes."""
-        if self._x_data is None or self._y_data is None:
+        if not self._data_sources:
             return
+            
+        pipeline_vm = get_pipeline_viewmodel()
         
-        if self._graph_type == "line":
-            ax.plot(
-                self._x_data,
-                self._y_data,
-                color=self._line_color,
-                linewidth=self._line_width,
-                marker=self._marker_style if self._marker_style != "none" else None,
-                markersize=self._marker_size,
-                label=self._y_array_name
-            )
-        elif self._graph_type == "scatter":
-            ax.scatter(
-                self._x_data,
-                self._y_data,
-                c=self._line_color,
-                s=self._marker_size * 10,
-                marker=self._marker_style if self._marker_style != "none" else "o",
-                label=self._y_array_name
-            )
-        elif self._graph_type == "histogram":
-            ax.hist(self._y_data, bins=30, color=self._line_color, alpha=0.7, label=self._y_array_name)
-        elif self._graph_type == "bar":
-            ax.bar(self._x_data, self._y_data, color=self._line_color, label=self._y_array_name)
+        for item_id, src in self._data_sources.items():
+            # Check visibility
+            if pipeline_vm:
+                p_item = pipeline_vm.items.get(item_id)
+                if p_item and not p_item.visible:
+                    continue
+            
+            x_data = src["x_data"]
+            y_data = src["y_data"]
+            label = src["y_array"]
+            
+            if x_data is None or y_data is None:
+                continue
+
+            if self._graph_type == "line":
+                ax.plot(
+                    x_data, y_data,
+                    color=src["line_color"],
+                    linewidth=src["line_width"],
+                    marker=src["marker_style"] if src["marker_style"] != "none" else None,
+                    markersize=src["marker_size"],
+                    label=label
+                )
+            elif self._graph_type == "scatter":
+                ax.scatter(
+                    x_data, y_data,
+                    c=src["line_color"],
+                    s=src["marker_size"] * 10,
+                    marker=src["marker_style"] if src["marker_style"] != "none" else "o",
+                    label=label
+                )
+            elif self._graph_type == "histogram":
+                ax.hist(y_data, bins=30, color=src["line_color"], alpha=0.7, label=label)
+            elif self._graph_type == "bar":
+                ax.bar(x_data, y_data, color=src["line_color"], label=label)
         
         if self._title:
             ax.set_title(self._title)
@@ -286,25 +382,18 @@ class GraphViewModel(QObject):
         if self._show_grid:
             ax.grid(True, alpha=0.3)
         
-        if self._show_legend and self._y_array_name:
+        if self._show_legend:
             ax.legend()
     
     def clear(self) -> None:
         """Clear all graph data."""
-        self._source_item_id = None
-        self._x_array_name = None
-        self._y_array_name = None
-        self._x_data = None
-        self._y_data = None
+        self._data_sources.clear()
         self.plot_config_updated.emit()
     
     def get_info(self) -> Dict[str, Any]:
         """Get graph information as a dictionary."""
         return {
             "graph_type": self._graph_type,
-            "source_item_id": self._source_item_id,
-            "x_array": self._x_array_name,
-            "y_array": self._y_array_name,
-            "array_type": self._array_type,
-            "data_points": len(self._x_data) if self._x_data is not None else 0,
+            "source_count": len(self._data_sources),
+            "sources": list(self._data_sources.keys())
         }

@@ -18,15 +18,10 @@ class TablePropertiesWidget(QWidget):
         layout = QVBoxLayout(self)
         form = QFormLayout()
         
-        # Array selection
-        self._array_combo = QComboBox()
-        self._array_combo.currentTextChanged.connect(self._on_array_changed)
-        form.addRow("Data Array:", self._array_combo)
-        
         # Array type
         self._type_combo = QComboBox()
         self._type_combo.addItems(["POINT", "CELL"])
-        self._type_combo.currentTextChanged.connect(self._on_array_changed)
+        self._type_combo.currentTextChanged.connect(self._on_array_type_changed)
         form.addRow("Array Type:", self._type_combo)
         
         layout.addLayout(form)
@@ -38,39 +33,29 @@ class TablePropertiesWidget(QWidget):
         self._viewmodel = viewmodel
         
         if not item or not viewmodel:
-            self._array_combo.clear()
             self.setEnabled(False)
             return
             
         self.setEnabled(True)
         
-        # Update array list
-        self._array_combo.blockSignals(True)
-        self._array_combo.clear()
-        
-        data_arrays = item.get_data_arrays()
-        for name, arr_type, components in data_arrays:
-            self._array_combo.addItem(name)
-            
         # Set current selection from viewmodel
         info = viewmodel.get_info()
-        current_array = info.get("array_name")
         current_type = info.get("array_type", "POINT")
         
-        if current_array:
-            self._array_combo.setCurrentText(current_array)
-        
+        self._type_combo.blockSignals(True)
         self._type_combo.setCurrentText(current_type)
-        self._array_combo.blockSignals(False)
+        self._type_combo.blockSignals(False)
         
-    def _on_array_changed(self, _) -> None:
-        """Handle array or type change."""
+    def _on_array_type_changed(self, _) -> None:
+        """Handle array type change."""
         if not self._item or not self._viewmodel:
             return
             
-        array_name = self._array_combo.currentText()
         array_type = self._type_combo.currentText()
-        
-        if array_name:
-            self._viewmodel.set_data_source(self._item.id, array_name, array_type)
-            self.array_changed.emit(array_name, array_type)
+        self._viewmodel.set_data_source(self._item.id, array_type)
+        # Signal updated to just string (type) if needed, but original signal was (name, type)
+        # We can emit ("ALL", array_type) or change signal. 
+        # Since TablePropertiesWidget signal 'array_changed' might be connected elsewhere...
+        # Let's check usages. 
+        # It's NOT connected in MainWindow or PropertiesPanel based on previous reads.
+        self.array_changed.emit("ALL", array_type)
