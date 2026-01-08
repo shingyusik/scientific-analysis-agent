@@ -1,6 +1,8 @@
 from PySide6.QtCore import QObject, Signal
 from typing import List, Optional, Any, Dict
 import numpy as np
+from vtk.util.numpy_support import vtk_to_numpy
+
 from utils.logger import get_logger
 from utils.app_context import get_pipeline_viewmodel
 
@@ -146,14 +148,23 @@ class GraphViewModel(QObject):
     
     def _extract_component(self, vtk_array, component: int, num_tuples: int) -> np.ndarray:
         """Extract a single component from a VTK array."""
-        num_components = vtk_array.GetNumberOfComponents()
-        
-        if num_components == 1:
-            # Scalar data
-            return np.array([vtk_array.GetValue(i) for i in range(num_tuples)])
-        else:
-            # Vector/tensor data - extract specific component
-            return np.array([vtk_array.GetTuple(i)[component] for i in range(num_tuples)])
+        try:
+            # Zero-copy conversion to numpy
+            np_array = vtk_to_numpy(vtk_array)
+            
+            num_components = vtk_array.GetNumberOfComponents()
+            
+            if num_components == 1:
+                return np_array
+            else:
+                # Vector/tensor data - extract specific component using numpy slicing
+                if component < 0 or component >= num_components:
+                    logger.warning(f"Invalid component index {component} for array with {num_components} components")
+                    return np.zeros(num_tuples)
+                return np_array[:, component]
+        except Exception as e:
+            logger.error(f"Error extracting component: {e}")
+            return np.zeros(num_tuples)
     
     def get_plot_config(self) -> Dict[str, Any]:
         """

@@ -1,6 +1,9 @@
 from PySide6.QtCore import QObject, Signal
 from typing import List, Optional, Any, Dict
 import vtk
+import numpy as np
+from vtk.util.numpy_support import vtk_to_numpy
+
 from utils.logger import get_logger
 from utils.app_context import get_pipeline_viewmodel
 
@@ -64,9 +67,11 @@ class TableViewModel(QObject):
         self._source_item_id = item_id
         self._array_type = array_type
         
-        # Build column headers from ALL arrays
+        # Build column headers and collect data arrays
         self._column_headers = ["Index"]
-        array_info = []  # (array, num_components, column_names)
+        
+        # Create index array
+        cols_data = [np.arange(num_tuples)]
         
         for i in range(data_arrays.GetNumberOfArrays()):
             array = data_arrays.GetArray(i)
@@ -76,30 +81,37 @@ class TableViewModel(QObject):
             array_name = array.GetName() or f"Array_{i}"
             num_components = array.GetNumberOfComponents()
             
-            col_names = []
-            if num_components == 1:
-                col_names.append(array_name)
-            elif num_components == 3:
-                col_names = [f"{array_name}_X", f"{array_name}_Y", f"{array_name}_Z"]
-            else:
-                col_names = [f"{array_name}_{j}" for j in range(num_components)]
+            # Convert VTK array to numpy (zero-copy if possible)
+            try:
+                np_array = vtk_to_numpy(array)
+            except Exception as e:
+                logger.warning(f"Failed to convert array {array_name} to numpy: {e}")
+                continue
             
-            self._column_headers.extend(col_names)
-            array_info.append((array, num_components, col_names))
+            if num_components == 1:
+                self._column_headers.append(array_name)
+                cols_data.append(np_array)
+            elif num_components == 3:
+                self._column_headers.extend([f"{array_name}_X", f"{array_name}_Y", f"{array_name}_Z"])
+                cols_data.append(np_array[:, 0])
+                cols_data.append(np_array[:, 1])
+                cols_data.append(np_array[:, 2])
+            else:
+                for j in range(num_components):
+                    self._column_headers.append(f"{array_name}_{j}")
+                    cols_data.append(np_array[:, j])
         
-        # Extract rows - iterate once through all tuples
-        self._data_rows = []
-        for i in range(num_tuples):
-            row = [i]  # Index column
-            for array, num_components, _ in array_info:
-                if num_components == 1:
-                    row.append(array.GetValue(i))
-                else:
-                    tuple_data = array.GetTuple(i)
-                    row.extend(tuple_data)
-            self._data_rows.append(row)
+        # Stack all columns efficiently
+        if len(cols_data) > 1:
+            # Use column_stack to create the matrix
+            full_data = np.column_stack(cols_data)
+            # Convert to list of lists for compatibility with existing view logic
+            # (Note: In a pure optimized version, we would keep it as numpy and update the view to handle it)
+            self._data_rows = full_data.tolist()
+        else:
+            self._data_rows = [[x] for x in cols_data[0]]
         
-        logger.info(f"Table data loaded: {len(self._data_rows)} rows, {len(self._column_headers)} columns from {len(array_info)} arrays")
+        logger.info(f"Table data loaded (Optimized): {len(self._data_rows)} rows, {len(self._column_headers)} columns")
         self.data_updated.emit()
         return True
     

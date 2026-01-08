@@ -89,70 +89,102 @@ class GraphViewWidget(QWidget):
             self._export_btn.setEnabled(False)
             return
         
-        # Clear previous plot
-        self._ax.clear()
-        
         # Render based on graph type
         graph_type = config.get("graph_type", "line")
         
         try:
-            if graph_type == "line":
-                self._ax.plot(
-                    x_data,
-                    y_data,
-                    color=config.get("line_color", "blue"),
-                    linewidth=config.get("line_width", 1.5),
-                    marker=config.get("marker_style") if config.get("marker_style") != "none" else None,
-                    markersize=config.get("marker_size", 5.0),
-                    label=config.get("y_label", "Data")
-                )
-            elif graph_type == "scatter":
-                marker = config.get("marker_style", "o")
-                if marker == "none":
-                    marker = "o"
-                self._ax.scatter(
-                    x_data,
-                    y_data,
-                    c=config.get("line_color", "blue"),
-                    s=config.get("marker_size", 5.0) * 10,
-                    marker=marker,
-                    label=config.get("y_label", "Data")
-                )
-            elif graph_type == "histogram":
-                self._ax.hist(
-                    y_data,
-                    bins=30,
-                    color=config.get("line_color", "blue"),
-                    alpha=0.7,
-                    label=config.get("y_label", "Data")
-                )
-            elif graph_type == "bar":
-                self._ax.bar(
-                    x_data,
-                    y_data,
-                    color=config.get("line_color", "blue"),
-                    label=config.get("y_label", "Data")
-                )
-            
-            # Apply styling
-            title = config.get("title", "")
-            if title:
-                self._ax.set_title(title, fontsize=12, fontweight='bold')
-            
-            self._ax.set_xlabel(config.get("x_label", "X"), fontsize=10)
-            self._ax.set_ylabel(config.get("y_label", "Y"), fontsize=10)
-            
-            if config.get("show_grid", True):
-                self._ax.grid(True, alpha=0.3, linestyle='--')
-            
-            if config.get("show_legend", False):
-                self._ax.legend()
-            
-            # Tight layout to prevent label cutoff
-            self._figure.tight_layout()
-            
-            # Redraw canvas
-            self._canvas.draw()
+            # Check if we can do a fast update (same graph type, existing plot)
+            # Only supported for line plots for now
+            can_fast_update = (
+                graph_type == "line" 
+                and len(self._ax.lines) > 0 
+                and self._ax.get_title() == config.get("title", "")
+                and self._ax.get_xlabel() == config.get("x_label", "X")
+                and self._ax.get_ylabel() == config.get("y_label", "Y")
+            )
+
+            if can_fast_update:
+                # Fast update: just set new data
+                line = self._ax.lines[0]
+                line.set_data(x_data, y_data)
+                
+                # Update styling if needed (usually less frequent)
+                line.set_color(config.get("line_color", "blue"))
+                line.set_linewidth(config.get("line_width", 1.5))
+                marker = config.get("marker_style")
+                line.set_marker(marker if marker != "none" else None)
+                line.set_markersize(config.get("marker_size", 5.0))
+                
+                # Rescale axes
+                self._ax.relim()
+                self._ax.autoscale_view()
+                
+                # Update legend label
+                if config.get("show_legend", False) and self._ax.get_legend():
+                    line.set_label(config.get("y_label", "Data"))
+                    self._ax.legend()
+                    
+                self._canvas.draw()
+                
+            else:
+                # Full redraw (fallback for other types or major changes)
+                self._ax.clear()
+                
+                if graph_type == "line":
+                    self._ax.plot(
+                        x_data,
+                        y_data,
+                        color=config.get("line_color", "blue"),
+                        linewidth=config.get("line_width", 1.5),
+                        marker=config.get("marker_style") if config.get("marker_style") != "none" else None,
+                        markersize=config.get("marker_size", 5.0),
+                        label=config.get("y_label", "Data")
+                    )
+                elif graph_type == "scatter":
+                    marker = config.get("marker_style", "o")
+                    if marker == "none":
+                        marker = "o"
+                    self._ax.scatter(
+                        x_data,
+                        y_data,
+                        c=config.get("line_color", "blue"),
+                        s=config.get("marker_size", 5.0) * 10,
+                        marker=marker,
+                        label=config.get("y_label", "Data")
+                    )
+                elif graph_type == "histogram":
+                    self._ax.hist(
+                        y_data,
+                        bins=30,
+                        color=config.get("line_color", "blue"),
+                        alpha=0.7,
+                        label=config.get("y_label", "Data")
+                    )
+                elif graph_type == "bar":
+                    self._ax.bar(
+                        x_data,
+                        y_data,
+                        color=config.get("line_color", "blue"),
+                        label=config.get("y_label", "Data")
+                    )
+                
+                # Apply styling
+                title = config.get("title", "")
+                if title:
+                    self._ax.set_title(title, fontsize=12, fontweight='bold')
+                
+                self._ax.set_xlabel(config.get("x_label", "X"), fontsize=10)
+                self._ax.set_ylabel(config.get("y_label", "Y"), fontsize=10)
+                
+                if config.get("show_grid", True):
+                    self._ax.grid(True, alpha=0.3, linestyle='--')
+                
+                if config.get("show_legend", False):
+                    self._ax.legend()
+                
+                # Tight layout to prevent label cutoff
+                self._figure.tight_layout()
+                self._canvas.draw()
             
             # Update info label
             info = self._viewmodel.get_info()
@@ -161,7 +193,7 @@ class GraphViewWidget(QWidget):
             self._info_label.setText(f"Type: {graph_type_display} | Points: {data_points:,}")
             self._export_btn.setEnabled(True)
             
-            logger.info(f"Plot updated: {graph_type} with {data_points} points")
+            logger.info(f"Plot updated: {graph_type} with {data_points} points (Fast update: {can_fast_update})")
             
         except Exception as e:
             logger.error(f"Failed to render plot: {e}")
