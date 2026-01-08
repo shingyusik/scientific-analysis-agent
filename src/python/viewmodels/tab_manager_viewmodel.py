@@ -143,7 +143,9 @@ class TabManagerViewModel(QObject):
     @expose_tool(
         name="close_tab",
         description=(
-            "Closes a specific tab by its ID.\n"
+            "Closes a specific tab (view) by its ID.\n"
+            "Use this when the user says 'close view', 'close tab', 'remove view', or 'delete tab'.\n"
+            "This assumes the user wants to close the VISUALIZATION WINDOW, not delete the underlying data.\n"
             "Parameters:\n"
             "- tab_id: ID of the tab to close.\n"
             "Returns:\n"

@@ -301,7 +301,9 @@ class PipelineViewModel(QObject):
     @expose_tool(
         name="delete_item",
         description=(
-            "Permanently deletes a specific item from the pipeline.\n"
+            "Permanently deletes a specific item (data source or filter) from the pipeline.\n"
+            "Use this ONLY when the user asks to delete DATA, SOURCE, FILTER, or OBJECT.\n"
+            "do NOT use this if the user asks to 'close tab', 'close view', or 'remove view'. Use close_tab for that.\n"
             "Parameters:\n"
             "- item_id: The unique ID of the item to delete.\n"
             "Returns:\n"

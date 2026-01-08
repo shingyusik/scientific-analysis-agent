@@ -151,6 +151,9 @@ class MainWindow(QMainWindow):
         # Register TimeSeriesManager in app context for agent tool access
         set_time_series_manager(self._time_manager)
         
+        # Register TabManagerViewModel in app context for agent tool access (ADDED)
+        set_tab_manager_viewmodel(self._tab_vm)
+        
         # NOW initialize the agent after all context is registered
         self._chat_vm.initialize_agent()
         
@@ -325,6 +328,8 @@ class MainWindow(QMainWindow):
         self._default_vtk_tab_id = self._tabbed_view.add_tab_with_id(
             self._vtk_widget, "vtk", "3D View", pinned=True
         )
+        # Register in TabManagerVM so the agent knows about it
+        self._tab_vm.register_tab(self._default_vtk_tab_id, "3D View", "vtk", pinned=True)
         
         # Initialize active tab state
         self._active_tab_id = self._default_vtk_tab_id
