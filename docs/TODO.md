@@ -14,3 +14,4 @@
 - subplot
 - 3d plot (contour)
 - heatmap
+- properties 업데이트 기능 툴 추가
