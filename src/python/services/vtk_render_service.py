@@ -30,10 +30,19 @@ class VTKRenderService:
         cone.SetHeight(3.0)
         cone.SetRadius(1.0)
         cone.SetResolution(40)
-        cone.Update()
+        # cone.Update() # Not needed with pipeline connection
+        
+        # Triangulate first because Subdivision filters only work on triangles
+        tri_filter = vtk.vtkTriangleFilter()
+        tri_filter.SetInputConnection(cone.GetOutputPort())
+        
+        # Subdivide mesh to improve coloring resolution along the height
+        subdiv = vtk.vtkLinearSubdivisionFilter()
+        subdiv.SetInputConnection(tri_filter.GetOutputPort())
+        subdiv.SetNumberOfSubdivisions(3) # Increase resolution
         
         elev = vtk.vtkElevationFilter()
-        elev.SetInputData(cone.GetOutput())
+        elev.SetInputConnection(subdiv.GetOutputPort())
         elev.SetLowPoint(-1.5, 0, 0)
         elev.SetHighPoint(1.5, 0, 0)
         elev.Update()
@@ -75,6 +84,7 @@ class VTKRenderService:
         
         actor = vtk.vtkActor()
         actor.SetMapper(mapper)
+        mapper.SetInterpolateScalarsBeforeMapping(False)
         
         return actor
     
@@ -208,6 +218,7 @@ class VTKRenderService:
             mapper.SetScalarModeToUseCellFieldData()
         
         mapper.SelectColorArray(actual_array_name)
+        mapper.SetInterpolateScalarsBeforeMapping(False)
         
         rng = actual_array.GetRange()
         mapper.SetScalarRange(rng)
@@ -215,7 +226,8 @@ class VTKRenderService:
         lut = mapper.GetLookupTable()
         if lut:
             lut.SetHueRange(0.6667, 0.0)
-            lut.SetRange(rng[0], rng[1])
+            lut.SetTableRange(rng[0], rng[1])
+            lut.Build()
             lut.Modified()
             
         logger.info(f"Color By Set: Array={actual_array_name}, Component={component}")
@@ -270,17 +282,15 @@ class VTKRenderService:
         process_data_object(data.GetCellData(), 'CELL')
         return arrays
     
-    def fit_scalar_range(self, actor: Any) -> bool:
-        """Set scalar range to data min/max values."""
+    def get_data_scalar_range(self, actor: Any) -> Tuple[float, float]:
+        """Get scalar range from actor's data."""
         mapper = actor.GetMapper()
-        if not mapper or not mapper.GetScalarVisibility():
-            logger.warning("fit_scalar_range: Mapper missing or scalar visibility off")
-            return False
+        if not mapper:
+            return None
         
         data = mapper.GetInput()
         if not data:
-            logger.warning("fit_scalar_range: No input data")
-            return False
+            return None
         
         array_name = mapper.GetArrayName()
         scalars = None
@@ -296,26 +306,28 @@ class VTKRenderService:
             scalars = data.GetPointData().GetScalars() or data.GetCellData().GetScalars()
         
         if not scalars:
-            logger.warning("fit_scalar_range: No scalars found to fit")
+            return None
+        
+        return scalars.GetRange()
+    
+    def fit_scalar_range(self, actor: Any) -> bool:
+        """Set scalar range to data min/max values."""
+        rng = self.get_data_scalar_range(actor)
+        if not rng:
+            logger.warning("fit_scalar_range: Could not get scalar range")
             return False
-        
-        rng = scalars.GetRange()
-        mapper.SetScalarRange(rng[0], rng[1])
-        
-        lut = mapper.GetLookupTable()
-        if lut:
-            lut.SetHueRange(0.6667, 0.0)
-            lut.SetRange(rng[0], rng[1])
-            lut.Modified()
-        
-        logger.info("Scalar Range Fitted to Data")
-        return True
+            
+        return self.set_custom_scalar_range(actor, rng[0], rng[1])
     
     def set_custom_scalar_range(self, actor: Any, min_val: float, max_val: float) -> bool:
         """Set custom scalar range."""
         mapper = actor.GetMapper()
-        if not mapper or not mapper.GetScalarVisibility():
-            logger.warning("set_custom_scalar_range: Mapper missing or scalar visibility off")
+        if not mapper:
+            logger.warning("set_custom_scalar_range: Mapper missing")
+            return False
+        
+        if not mapper.GetScalarVisibility():
+            logger.warning("set_custom_scalar_range: Scalar visibility is off, cannot apply custom range")
             return False
         
         mapper.SetScalarRange(min_val, max_val)
@@ -323,7 +335,8 @@ class VTKRenderService:
         lut = mapper.GetLookupTable()
         if lut:
             lut.SetHueRange(0.6667, 0.0)
-            lut.SetRange(min_val, max_val)
+            lut.SetTableRange(min_val, max_val)
+            lut.Build()
             lut.Modified()
         
         logger.info(f"Custom Scalar Range Set: [{min_val}, {max_val}]")

@@ -1,3 +1,4 @@
+from typing import Any, Optional
 from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
                                QMenu, QToolButton, QFileDialog, QMessageBox, QToolBar,
                                QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox, QLabel)
@@ -261,11 +262,19 @@ class MainWindow(QMainWindow):
         for name, c1, c2 in self._vtk_vm.BACKGROUND_PRESETS:
             action = bg_menu.addAction(name)
             action.triggered.connect(
-                lambda checked=False, col1=c1, col2=c2: self._vtk_vm.set_background(col1, col2)
+                lambda checked=False, n=name: self._vtk_vm.set_background_preset(n)
             )
-        
+            
         bg_btn.setMenu(bg_menu)
         toolbar.addWidget(bg_btn)
+        
+        # Sync with ViewModel
+        self._vtk_vm.background_preset_changed.connect(
+            lambda name: bg_btn.setText(name)
+        )
+        # Initialize
+        current_name = self._vtk_vm._current_background[0]
+        bg_btn.setText(current_name)
     
     def _setup_representation_menu(self, toolbar) -> None:
         """Setup representation style dropdown."""
@@ -281,11 +290,47 @@ class MainWindow(QMainWindow):
         for style in self._vtk_vm.REPRESENTATION_STYLES:
             action = rep_menu.addAction(style)
             action.triggered.connect(
-                lambda checked=False, s=style: self._on_representation_changed(s)
+                lambda checked=False, s=style: self._set_selected_item_representation(s)
             )
         
         rep_btn.setMenu(rep_menu)
         toolbar.addWidget(rep_btn)
+        
+        # Sync with ViewModel
+        # Sync with ViewModel (Item based sync)
+        self._pipeline_vm.item_style_changed.connect(
+            lambda item_id, style: self._on_item_style_changed(rep_btn, item_id, style)
+        )
+        self._pipeline_vm.selection_changed.connect(
+            lambda item: self._on_item_selected_for_toolbar(rep_btn, item)
+        )
+        
+    def _set_selected_item_representation(self, style: str) -> None:
+        """Set representation for selected item via Toolbar."""
+        selected = self._pipeline_vm.selected_item
+        if selected:
+            # This triggers item_style_changed -> updates toolbar & properties panel
+            self._pipeline_vm.set_representation(selected.id, style)
+            self._vtk_vm.request_render()
+
+    def _on_item_style_changed(self, btn: QToolButton, item_id: str, style: str) -> None:
+        """Handle item representation change."""
+        # Update Toolbar if selected item changed
+        selected = self._pipeline_vm.selected_item
+        if selected and selected.id == item_id:
+            btn.setText(style)
+            # Update Properties Panel Combo (without triggering apply loop)
+            # PropertiesPanel handles 'representation_style_changed' internally? 
+            # No, PropertiesPanel listens to its own UI. We need to push update to it.
+            # But PropertiesPanel reloads from item if we call set_item? No that's too heavy.
+            # We need a way to just update the combo text.
+            self._properties_panel.update_representation_indicator(style)
+
+    def _on_item_selected_for_toolbar(self, btn: QToolButton, item: Any) -> None:
+        """Update toolbar when selection changes."""
+        if item:
+            style = self._vtk_vm.get_representation_style(item.actor)
+            btn.setText(style)
     
     def _setup_time_animation_toolbar(self) -> None:
         """Setup time animation toolbar."""
@@ -325,6 +370,7 @@ class MainWindow(QMainWindow):
         
         # Create initial VTK render view tab (pinned by default)
         self._vtk_widget = VTKWidget()
+        self._vtk_widget.camera_changed.connect(self._vtk_vm.notify_camera_state)
         self._default_vtk_tab_id = self._tabbed_view.add_tab_with_id(
             self._vtk_widget, "vtk", "3D View", pinned=True
         )
@@ -367,6 +413,10 @@ class MainWindow(QMainWindow):
         self._properties_panel.color_by_changed.connect(self._on_color_by_changed)
         self._properties_panel.filter_params_changed.connect(self._on_filter_params_changed)
         self._properties_panel.legend_settings_changed.connect(self._vtk_vm.set_legend_settings)
+        self._properties_panel.custom_range_requested.connect(self._on_custom_range)
+        self._properties_panel.representation_style_changed.connect(
+            lambda item_id, style: [self._pipeline_vm.set_representation(item_id, style), self._vtk_vm.request_render()]
+        )
         
         self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
         self._chat_panel.new_conversation_requested.connect(self._chat_vm.start_new_conversation)
@@ -407,6 +457,7 @@ class MainWindow(QMainWindow):
         self._vtk_vm.scalar_bar_update_requested.connect(self._vtk_widget.update_scalar_bar)
         self._vtk_vm.scalar_bar_hide_requested.connect(self._vtk_widget.hide_scalar_bar)
         self._vtk_vm.legend_settings_changed.connect(self._vtk_widget.apply_legend_settings)
+        self._vtk_vm.render_requested.connect(self._vtk_widget.render)
         
         # Tabbed view connections
         self._tabbed_view.tab_created.connect(self._on_tab_created)
@@ -545,7 +596,6 @@ class MainWindow(QMainWindow):
         selected = self._pipeline_vm.selected_item
         if selected:
             self._pipeline_vm.set_representation(selected.id, style)
-            self._update_properties_panel(selected)
             self._vtk_vm.request_render()
     
     def _on_item_added(self, item) -> None:
@@ -688,8 +738,11 @@ class MainWindow(QMainWindow):
         # Determine viewmodel based on active tab
         viewmodel = None
         widget = self._tabbed_view.get_active_tab_widget()
-        if widget and hasattr(widget, "viewmodel"):
-            viewmodel = widget.viewmodel
+        if widget:
+            if hasattr(widget, "viewmodel"):
+                viewmodel = widget.viewmodel
+            elif widget == self._vtk_widget:
+                viewmodel = self._vtk_vm
             
         self._properties_panel.set_item(
             item, ctx.style, ctx.data_arrays, ctx.current_array, ctx.current_component,

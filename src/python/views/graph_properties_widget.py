@@ -65,6 +65,18 @@ class GraphPropertiesWidget(QWidget):
         layout.addLayout(form)
         layout.addStretch()
         
+        # Connect signals to notify parent
+        self._type_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
+        self._x_array_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
+        self._y_array_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
+        self._y_component_combo.currentIndexChanged.connect(lambda: self.graph_updated.emit())
+        self._array_type_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
+        self._title_edit.textChanged.connect(lambda: self.graph_updated.emit())
+        self._x_label_edit.textChanged.connect(lambda: self.graph_updated.emit())
+        self._y_label_edit.textChanged.connect(lambda: self.graph_updated.emit())
+        self._grid_check.toggled.connect(lambda: self.graph_updated.emit())
+        self._legend_check.toggled.connect(lambda: self.graph_updated.emit())
+        
     def set_item(self, item, viewmodel: GraphViewModel) -> None:
         """Set the current pipeline item and its graph viewmodel."""
         self._item = item

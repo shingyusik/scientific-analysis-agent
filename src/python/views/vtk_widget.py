@@ -29,6 +29,7 @@ class VTKWidget(QWidget):
     """VTK rendering widget - handles only rendering and display."""
     
     initialized = Signal()
+    camera_changed = Signal(dict) # Signals camera state change from interaction
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -53,6 +54,7 @@ class VTKWidget(QWidget):
         self.vtk_widget.Initialize()
         
         style = vtk.vtkInteractorStyleTrackballCamera()
+        style.AddObserver("EndInteractionEvent", self._on_interaction)
         self.vtk_widget.GetRenderWindow().GetInteractor().SetInteractorStyle(style)
         
         self._setup_axes()
@@ -63,6 +65,10 @@ class VTKWidget(QWidget):
         
         self.vtk_widget.Start()
         self.initialized.emit()
+        
+    def _on_interaction(self, obj, event):
+        """Handle interaction events."""
+        self.camera_changed.emit(self.get_camera_state())
     
     def set_interaction_enabled(self, enabled: bool) -> None:
         """Enable or disable VTK interactor and associated widgets."""
@@ -394,7 +400,8 @@ class VTKWidget(QWidget):
         if lut:
             rng = mapper.GetScalarRange()
             lut.SetHueRange(0.6667, 0.0)
-            lut.SetRange(rng[0], rng[1])
+            lut.SetTableRange(rng[0], rng[1])
+            lut.Build()
             lut.Modified()
             
             settings = self._legend_settings

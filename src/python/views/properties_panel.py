@@ -25,9 +25,11 @@ class PropertiesPanel(QWidget):
     point_size_changed = Signal(str, float)  # item_id, value
     line_width_changed = Signal(str, float)  # item_id, value
     gaussian_scale_changed = Signal(str, float)  # item_id, value
+    representation_style_changed = Signal(str, str)  # item_id, style
     color_by_changed = Signal(str, str, str, str)  # item_id, array_name, array_type, component
     filter_params_changed = Signal(str, dict)  # item_id, params (general purpose)
     legend_settings_changed = Signal(dict)  # legend settings dictionary
+    custom_range_requested = Signal()  # Request custom range dialog
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -38,6 +40,9 @@ class PropertiesPanel(QWidget):
         self._render_service: Optional["VTKRenderService"] = None
         self._filter_widget: Optional[QWidget] = None
         self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
+        
+        self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
+        self._pending_changes = {}  # Store pending changes for batch apply
         
         self._active_tab_type: TabType = TabType.VTK  # Default
         
@@ -115,6 +120,7 @@ class PropertiesPanel(QWidget):
         
         # 3. Graph Properties
         self._graph_props = GraphPropertiesWidget()
+        self._graph_props.graph_updated.connect(lambda: self._apply_btn.setEnabled(True))
         self._graph_props_scroll = QScrollArea()
         self._graph_props_scroll.setWidgetResizable(True)
         self._graph_props_scroll.setWidget(self._graph_props)
@@ -148,13 +154,19 @@ class PropertiesPanel(QWidget):
         self._data_arrays = data_arrays or []
         self._parent_bounds = parent_bounds
         
+        # Reset pending changes on item switch
+        self._pending_changes = {}
+        
         # Update universal buttons
         self._delete_btn.setEnabled(item is not None)
-        # Apply button is enabled for Filter (VTK mode) or Graph/Table modes
+        # Apply button initially disabled until changes are made
+        self._apply_btn.setEnabled(False)
+        
         if self._active_tab_type == TabType.VTK:
-             self._apply_btn.setEnabled(item is not None and "filter" in item.item_type)
+             # Store ViewModel reference for VTK properties
+             self._vtk_vm_ref = viewmodel
         else:
-             self._apply_btn.setEnabled(item is not None)
+             self._vtk_vm_ref = None
         
         if self._active_tab_type == TabType.VTK:
             self._rebuild_vtk_ui(current_array, current_component, scalar_visible)
@@ -187,8 +199,9 @@ class PropertiesPanel(QWidget):
             return
         
         if self._data_arrays:
-            self._add_color_by_section(current_array, current_component, scalar_visible)
+            self._add_coloring_and_range_section(current_array, current_component, scalar_visible)
         
+        self._add_view_controls_section()
         self._add_styling_section()
         
         if self._data_arrays:
@@ -199,6 +212,130 @@ class PropertiesPanel(QWidget):
             self._add_filter_params_section(item)
         
         self._vtk_layout.addStretch()
+        
+    def _add_view_controls_section(self) -> None:
+        """Add global view controls (Camera, Env)."""
+        group = QGroupBox("View Controls")
+        layout = QFormLayout(group)
+        
+        if not self._current_item or not hasattr(self, '_vtk_vm_ref') or not self._vtk_vm_ref:
+            pass
+
+        # Camera Controls (Detailed)
+        # Position
+        pos_row = QHBoxLayout()
+        self._cam_pos_spins = [ScientificDoubleSpinBox() for _ in range(3)]
+        for spin in self._cam_pos_spins:
+            spin.setRange(-1e9, 1e9)
+            pos_row.addWidget(spin)
+        layout.addRow("Camera Pos:", pos_row)
+
+        # Focal Point
+        focal_row = QHBoxLayout()
+        self._cam_focal_spins = [ScientificDoubleSpinBox() for _ in range(3)]
+        for spin in self._cam_focal_spins:
+            spin.setRange(-1e9, 1e9)
+            focal_row.addWidget(spin)
+        layout.addRow("Focal Point:", focal_row)
+
+        # View Up
+        up_row = QHBoxLayout()
+        self._cam_up_spins = [ScientificDoubleSpinBox() for _ in range(3)]
+        for spin in self._cam_up_spins:
+            spin.setRange(-1.0, 1.0)
+            spin.setSingleStep(0.1)
+            up_row.addWidget(spin)
+        layout.addRow("View Up:", up_row)
+        
+        # Zoom (Angle?) - VTK usually uses different params for zoom. 
+        # But 'set_camera_view' tool uses 'zoom' factor. 
+        # Let's check get_camera_state returns. It returns pos, focal, up, zoom.
+        # So we add a Zoom spinbox.
+        zoom_row = QHBoxLayout()
+        self._cam_zoom_spin = ScientificDoubleSpinBox()
+        self._cam_zoom_spin.setRange(0.001, 1000.0) # Zoom factor
+        self._cam_zoom_spin.setValue(1.0)
+        zoom_row.addWidget(self._cam_zoom_spin)
+        layout.addRow("Zoom:", zoom_row)
+
+        # Connect signals
+        # Connect signals
+        if self._vtk_vm_ref:
+             # Update inputs from ViewModel state change
+            self._vtk_vm_ref.camera_state_changed.connect(self._update_camera_inputs)
+            
+            # Queue changes
+            def queue_camera_change():
+                state = {
+                    "position": [s.value() for s in self._cam_pos_spins],
+                    "focal_point": [s.value() for s in self._cam_focal_spins],
+                    "view_up": [s.value() for s in self._cam_up_spins],
+                    "zoom": self._cam_zoom_spin.value()
+                }
+                self._pending_changes["camera"] = state
+                self._apply_btn.setEnabled(True)
+
+            for spin in self._cam_pos_spins + self._cam_focal_spins + self._cam_up_spins + [self._cam_zoom_spin]:
+                spin.valueChanged.connect(lambda: queue_camera_change())
+
+            # Initial Query
+            self._vtk_vm_ref.request_camera_query()
+
+        # Background
+        if self._vtk_vm_ref:
+            bg_combo = QComboBox()
+            bg_combo.addItems([p[0] for p in self._vtk_vm_ref.BACKGROUND_PRESETS])
+            # Set current
+            current_bg = self._vtk_vm_ref._current_background[0]
+            bg_combo.setCurrentText(current_bg)
+            
+            bg_combo.currentTextChanged.connect(lambda t: [
+                self._pending_changes.update({"background": t}),
+                self._apply_btn.setEnabled(True)
+            ])
+            self._vtk_vm_ref.background_preset_changed.connect(bg_combo.setCurrentText)
+            
+            layout.addRow("Background:", bg_combo)
+            
+            # Representation
+            self._rep_combo = QComboBox()
+            self._rep_combo.addItems(self._vtk_vm_ref.REPRESENTATION_STYLES)
+            current_rep = self._vtk_vm_ref._current_representation
+            self._rep_combo.setCurrentText(current_rep)
+            
+            self._rep_combo.currentTextChanged.connect(lambda t: [
+                self._pending_changes.update({"representation": t}),
+                self._apply_btn.setEnabled(True)
+            ])
+            # Note: do NOT connect representation_changed from VTKViewModel to combo.
+            # PropertiesPanel Representation is per-item, not global.
+            
+            layout.addRow("Representation:", self._rep_combo)
+            
+        self._vtk_layout.addWidget(group)
+        
+    def _update_camera_inputs(self, state: dict) -> None:
+        """Update camera inputs from state dictionary."""
+        # Block signals to prevent feedback loop
+        all_spins = self._cam_pos_spins + self._cam_focal_spins + self._cam_up_spins + [self._cam_zoom_spin]
+        for spin in all_spins:
+            spin.blockSignals(True)
+            
+        try:
+            if "position" in state:
+                for i, val in enumerate(state["position"]):
+                    self._cam_pos_spins[i].setValue(val)
+            if "focal_point" in state:
+                for i, val in enumerate(state["focal_point"]):
+                    self._cam_focal_spins[i].setValue(val)
+            if "view_up" in state:
+                for i, val in enumerate(state["view_up"]):
+                    self._cam_up_spins[i].setValue(val)
+            if "zoom" in state:
+                self._cam_zoom_spin.setValue(state["zoom"])
+        finally:
+            for spin in all_spins:
+                spin.blockSignals(False)
     
     def _add_filter_params_section(self, item: PipelineItem) -> None:
         """Add filter parameters section using the filter registry."""
@@ -211,7 +348,8 @@ class PropertiesPanel(QWidget):
         filter_instance = filter_class(self._render_service)
         
         def on_params_changed(item_id: str, params: dict):
-            self.filter_params_changed.emit(item_id, params)
+            self._pending_changes["filter_params"] = (item_id, params)
+            self._apply_btn.setEnabled(True)
         
         widget = filter_instance.create_params_widget(
             self._vtk_content, item, self._parent_bounds, on_params_changed
@@ -221,12 +359,14 @@ class PropertiesPanel(QWidget):
             self._filter_widget = widget
             self._vtk_layout.addWidget(widget)
     
-    def _add_color_by_section(self, current_array: str, current_component: str, 
+    def _add_coloring_and_range_section(self, current_array: str, current_component: str, 
                                scalar_visible: bool) -> None:
-        """Add color by dropdown with vector component selection."""
-        group = QGroupBox("Color By")
-        layout = QHBoxLayout(group)
+        """Add coloring and range controls."""
+        group = QGroupBox("Coloring & Range")
+        layout = QVBoxLayout(group)
         
+        # 1. Color By Row
+        color_row = QHBoxLayout()
         main_combo = QComboBox()
         main_combo.addItem("Solid Color", ("__SolidColor__", None, None))
         
@@ -291,23 +431,78 @@ class PropertiesPanel(QWidget):
             if not self._current_item:
                 return
             main_data = main_combo.itemData(main_combo.currentIndex())
+            
+            self._pending_changes["color_by"] = None # Reset
+            
             if main_data[0] == "__SolidColor__":
-                self.color_by_changed.emit(self._current_item.id, "__SolidColor__", "POINT", "")
+                self._pending_changes["color_by"] = (self._current_item.id, "__SolidColor__", "POINT", "")
             else:
                 name, type_, num_components = main_data
                 if num_components and num_components > 1:
                     component = component_combo.itemData(component_combo.currentIndex())
-                    self.color_by_changed.emit(self._current_item.id, name, type_, component)
+                    self._pending_changes["color_by"] = (self._current_item.id, name, type_, component)
                 else:
-                    self.color_by_changed.emit(self._current_item.id, name, type_, "")
+                    self._pending_changes["color_by"] = (self._current_item.id, name, type_, "")
+            
+            self._apply_btn.setEnabled(True)
         
         main_combo.currentIndexChanged.connect(on_main_combo_changed)
         component_combo.currentIndexChanged.connect(on_selection_changed)
         
         update_component_combo(current_main_idx, saved_component)
         
-        layout.addWidget(main_combo)
-        layout.addWidget(component_combo)
+        color_row.addWidget(main_combo)
+        color_row.addWidget(component_combo)
+        layout.addLayout(color_row) # Add color row to main layout
+        
+        # 2. Range Controls
+        range_layout = QFormLayout()
+        
+        # Fit Range Button
+        btn_fit = QPushButton("Fit Range")
+        def on_fit_clicked():
+            if self._vtk_vm_ref and self._current_item and self._current_item.actor:
+                rng = self._vtk_vm_ref.get_data_scalar_range(self._current_item.actor)
+                if rng:
+                    # Update spinboxes, which triggers valueChanged -> pending_changes
+                    self._range_min_spin.setValue(rng[0])
+                    self._range_max_spin.setValue(rng[1])
+        btn_fit.clicked.connect(on_fit_clicked)
+        range_layout.addRow("", btn_fit)
+        
+        # Custom Range Min/Max
+        custom_range_row = QHBoxLayout()
+        self._range_min_spin = ScientificDoubleSpinBox()
+        self._range_min_spin.setRange(-1e30, 1e30)
+        self._range_max_spin = ScientificDoubleSpinBox()
+        self._range_max_spin.setRange(-1e30, 1e30)
+        
+        # Get current range from actor if available
+        if self._current_item and self._current_item.actor:
+            mapper = self._current_item.actor.GetMapper()
+            if mapper:
+                current_range = mapper.GetScalarRange()
+                self._range_min_spin.setValue(current_range[0])
+                self._range_max_spin.setValue(current_range[1])
+        
+        def on_custom_range_changed():
+            self._pending_changes["custom_range"] = (
+                self._range_min_spin.value(),
+                self._range_max_spin.value()
+            )
+            self._apply_btn.setEnabled(True)
+        
+        self._range_min_spin.valueChanged.connect(on_custom_range_changed)
+        self._range_max_spin.valueChanged.connect(on_custom_range_changed)
+        
+        custom_range_row.addWidget(QLabel("Min:"))
+        custom_range_row.addWidget(self._range_min_spin)
+        custom_range_row.addWidget(QLabel("Max:"))
+        custom_range_row.addWidget(self._range_max_spin)
+        range_layout.addRow("Custom Range:", custom_range_row)
+        
+        layout.addLayout(range_layout)
+        
         self._vtk_layout.addWidget(group)
     
     def _on_apply_clicked(self) -> None:
@@ -316,17 +511,84 @@ class PropertiesPanel(QWidget):
             return
             
         if self._active_tab_type == TabType.VTK:
-            self.apply_filter_requested.emit(self._current_item.id)
+            if not self._vtk_vm_ref:
+                return
+                
+            changes = self._pending_changes
+            
+            # Apply Filter Parameters
+            if "filter_params" in changes:
+                item_id, params = changes["filter_params"]
+                self.filter_params_changed.emit(item_id, params)
+            
+            # Trigger Filter Commit (if filter)
+            if "filter" in self._current_item.item_type:
+                self.apply_filter_requested.emit(self._current_item.id)
+            
+            # Camera
+            if "camera" in changes:
+                self._vtk_vm_ref.apply_camera_state(changes["camera"])
+            
+            # Background
+            if "background" in changes:
+                self._vtk_vm_ref.set_background_preset(changes["background"])
+                
+            # Representation (per-item, not global)
+            if "representation" in changes:
+                self.representation_style_changed.emit(self._current_item.id, changes["representation"])
+                
+            # Color By
+            if "color_by" in changes and changes["color_by"]:
+                item_id, name, type_, component = changes["color_by"]
+                self.color_by_changed.emit(item_id, name, type_, component)
+            
+            # Opacity
+            if "opacity" in changes:
+                self.opacity_changed.emit(self._current_item.id, changes["opacity"])
+                
+            # Point Size
+            if "point_size" in changes:
+                self.point_size_changed.emit(self._current_item.id, changes["point_size"])
+                
+            # Line Width
+            if "line_width" in changes:
+                self.line_width_changed.emit(self._current_item.id, changes["line_width"])
+                
+            # Gaussian Scale
+            if "gaussian_scale" in changes:
+                self.gaussian_scale_changed.emit(self._current_item.id, changes["gaussian_scale"])
+                
+            # Legend
+            if "legend" in changes:
+                self.legend_settings_changed.emit(changes["legend"])
+            
+            # Custom Scalar Range
+            if "custom_range" in changes:
+                min_val, max_val = changes["custom_range"]
+                if self._current_item and self._current_item.actor:
+                    self._vtk_vm_ref.set_custom_scalar_range(
+                        self._current_item.actor, min_val, max_val
+                    )
+                    self._vtk_vm_ref.update_scalar_bar(self._current_item.actor)
+                    self._vtk_vm_ref.request_render()
+            
+            self._pending_changes = {}
+            self._apply_btn.setEnabled(False)
+            
         elif self._active_tab_type == TabType.GRAPH:
             # Delegate to graph widget
             self._graph_props.apply_changes()
         elif self._active_tab_type == TabType.TABLE:
-            # Table updates immediately for now, but if we add features this might change
-            # However, user expected manual update.
-            # TablePropertiesWidget currently updates on combo change.
-            # Let's leave it as is for Table unless asked.
             pass
     
+    def update_representation_indicator(self, style: str) -> None:
+        """Update representation combobox without triggering signals."""
+        idx = self._rep_combo.findText(style)
+        if idx >= 0:
+            self._rep_combo.blockSignals(True)
+            self._rep_combo.setCurrentIndex(idx)
+            self._rep_combo.blockSignals(False)
+            
     def _on_delete_clicked(self) -> None:
         """Handle delete button click."""
         if self._current_item:
@@ -375,8 +637,8 @@ class PropertiesPanel(QWidget):
             spin.setValue(val)
             slider.blockSignals(False)
             spin.blockSignals(False)
-            if self._current_item:
-                self.opacity_changed.emit(self._current_item.id, val / 100.0)
+            self._pending_changes["opacity"] = val / 100.0
+            self._apply_btn.setEnabled(True)
         
         slider.valueChanged.connect(update_opacity)
         spin.valueChanged.connect(update_opacity)
@@ -402,8 +664,8 @@ class PropertiesPanel(QWidget):
         reset_btn.setFixedWidth(50)
         
         def update_size(val):
-            if self._current_item:
-                self.point_size_changed.emit(self._current_item.id, val)
+            self._pending_changes["point_size"] = val
+            self._apply_btn.setEnabled(True)
         
         spin.valueChanged.connect(update_size)
         reset_btn.clicked.connect(lambda: [spin.setValue(3.0), update_size(3.0)])
@@ -427,8 +689,8 @@ class PropertiesPanel(QWidget):
         reset_btn.setFixedWidth(50)
         
         def update_width(val):
-            if self._current_item:
-                self.line_width_changed.emit(self._current_item.id, val)
+            self._pending_changes["line_width"] = val
+            self._apply_btn.setEnabled(True)
         
         spin.valueChanged.connect(update_width)
         reset_btn.clicked.connect(lambda: [spin.setValue(1.0), update_width(1.0)])
@@ -453,8 +715,8 @@ class PropertiesPanel(QWidget):
         reset_btn.setFixedWidth(50)
         
         def update_scale(val):
-            if self._current_item:
-                self.gaussian_scale_changed.emit(self._current_item.id, val)
+            self._pending_changes["gaussian_scale"] = val
+            self._apply_btn.setEnabled(True)
         
         spin.valueChanged.connect(update_scale)
         reset_btn.clicked.connect(lambda: [spin.setValue(0.05), update_scale(0.05)])
@@ -606,7 +868,8 @@ class PropertiesPanel(QWidget):
     def _on_legend_setting_changed(self, key: str, value) -> None:
         """Handle legend setting change."""
         self._legend_settings[key] = value
-        self.legend_settings_changed.emit(self._legend_settings.copy())
+        self._pending_changes["legend"] = self._legend_settings.copy()
+        self._apply_btn.setEnabled(True)
     
     def _update_legend_spinbox_ranges(self) -> None:
         """Update position/size spinbox ranges to prevent legend overflow."""
@@ -642,4 +905,5 @@ class PropertiesPanel(QWidget):
         self._legend_settings["width"] = self._width_spin.value()
         self._legend_settings["height"] = self._height_spin.value()
         
-        self.legend_settings_changed.emit(self._legend_settings.copy())
+        self._pending_changes["legend"] = self._legend_settings.copy()
+        self._apply_btn.setEnabled(True)

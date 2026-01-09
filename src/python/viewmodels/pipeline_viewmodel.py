@@ -19,6 +19,7 @@ class PipelineViewModel(QObject):
     selection_changed = Signal(object)  # PipelineItem or None
     message = Signal(str)  # Status messages
     time_series_loaded = Signal(object)  # PipelineItem with time series
+    item_style_changed = Signal(str, str) # item_id, style
     
     
     def __init__(self, render_service: VTKRenderService, file_loader: FileLoaderService):
@@ -385,7 +386,8 @@ class PipelineViewModel(QObject):
         item = self._items.get(item_id)
         if item and item.actor:
             self._render_service.set_representation(item.actor, style)
-            self.item_updated.emit(item)
+            # self.item_updated.emit(item)  # Causes UI rebuild loop
+            self.item_style_changed.emit(item_id, style)
             self.message.emit(f"Set '{item.name}' representation to {style}.")
             return f"Set '{item.name}' representation to '{style}'."
         return f"Item {item_id} not found."

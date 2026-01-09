@@ -12,11 +12,13 @@ class VTKViewModel(QObject):
     
     render_requested = Signal()
     background_changed = Signal(tuple, object)  # (color1, color2 or None)
+    background_preset_changed = Signal(str)     # preset_name
     camera_reset_requested = Signal()
     view_plane_requested = Signal(str)  # "xy", "yz", "xz"
     actor_added = Signal(object)  # actor
     actor_removed = Signal(object)  # actor
     actor_visibility_changed = Signal(object, bool)  # actor, visible
+    representation_changed = Signal(str) # style
     clear_scene_requested = Signal()
     plane_preview_requested = Signal(list, list, tuple)  # origin, normal, bounds
     plane_preview_hide_requested = Signal()
@@ -46,6 +48,7 @@ class VTKViewModel(QObject):
         super().__init__()
         self._render_service = render_service
         self._current_background = self.BACKGROUND_PRESETS[0]
+        self._current_representation = "Surface" # Default tracking
         self._last_camera_state = {}
     
     @property
@@ -81,9 +84,17 @@ class VTKViewModel(QObject):
         for name, c1, c2 in self.BACKGROUND_PRESETS:
             if name == preset_name:
                 self._current_background = (name, c1, c2)
-                self.background_changed.emit(c1, c2)
+                self.set_background(c1, c2)
+                self.background_preset_changed.emit(name)
                 logger.info(f"Background preset changed: {preset_name}")
                 break
+    
+    def set_representation_style(self, style: str) -> None:
+        """Set global representation style."""
+        if style in self.REPRESENTATION_STYLES:
+            self._current_representation = style
+            self.representation_changed.emit(style)
+            logger.info(f"Representation style changed: {style}")
     
     @expose_tool(
         name="reset_camera_view",
@@ -275,6 +286,10 @@ class VTKViewModel(QObject):
         if data:
             return self._render_service.get_data_arrays(data)
         return []
+        
+    def get_data_scalar_range(self, actor: Any) -> Tuple[float, float]:
+        """Get scalar range from actor's data."""
+        return self._render_service.get_data_scalar_range(actor)
     
     def fit_scalar_range(self, actor: Any) -> bool:
         """Fit scalar range to data min/max."""
