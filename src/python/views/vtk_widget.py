@@ -3,6 +3,20 @@ from PySide6.QtCore import Signal
 import vtk
 import numpy as np
 from typing import Any, Tuple, List
+from utils.constants import (
+    DEFAULT_LEGEND_SETTINGS,
+    DEFAULT_BACKGROUND_COLOR,
+    DEFAULT_SCALAR_BAR_POSITION_X,
+    DEFAULT_SCALAR_BAR_POSITION_Y,
+    DEFAULT_SCALAR_BAR_WIDTH,
+    DEFAULT_SCALAR_BAR_HEIGHT,
+    DEFAULT_ARROW_SHAFT_RADIUS,
+    DEFAULT_ARROW_TIP_RADIUS,
+    DEFAULT_ARROW_TIP_LENGTH,
+    DEFAULT_ARROW_RESOLUTION,
+    DEFAULT_PLANE_PREVIEW_OPACITY,
+    AXES_WIDGET_VIEWPORT,
+)
 
 try:
     from vtk.modules.vtkGUISupportQt import QVTKRenderWindowInteractor
@@ -11,18 +25,6 @@ except ImportError:
         from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
     except ImportError:
         QVTKRenderWindowInteractor = None
-
-
-DEFAULT_LEGEND_SETTINGS = {
-    "font_size": 12,
-    "font_color": (1.0, 1.0, 1.0),
-    "bold": True,
-    "italic": False,
-    "position_x": 0.9,
-    "position_y": 0.3,
-    "width": 0.08,
-    "height": 0.4
-}
 
 
 class VTKWidget(QWidget):
@@ -48,7 +50,7 @@ class VTKWidget(QWidget):
         self._layout.addWidget(self.vtk_widget)
         
         self.renderer = vtk.vtkRenderer()
-        self.renderer.SetBackground(0.32, 0.34, 0.43)
+        self.renderer.SetBackground(*DEFAULT_BACKGROUND_COLOR)
         self.vtk_widget.GetRenderWindow().AddRenderer(self.renderer)
         
         self.vtk_widget.Initialize()
@@ -93,7 +95,7 @@ class VTKWidget(QWidget):
         self.axes_widget = vtk.vtkOrientationMarkerWidget()
         self.axes_widget.SetOrientationMarker(self.axes_actor)
         self.axes_widget.SetInteractor(self.vtk_widget.GetRenderWindow().GetInteractor())
-        self.axes_widget.SetViewport(0.0, 0.0, 0.2, 0.2)
+        self.axes_widget.SetViewport(*AXES_WIDGET_VIEWPORT)
         self.axes_widget.SetEnabled(1)
         self.axes_widget.InteractiveOn()
     
@@ -104,8 +106,8 @@ class VTKWidget(QWidget):
         self.scalar_bar_widget.On()
         
         sb_rep = self.scalar_bar_widget.GetRepresentation()
-        sb_rep.SetPosition(0.9, 0.3)
-        sb_rep.SetPosition2(0.08, 0.4)
+        sb_rep.SetPosition(DEFAULT_SCALAR_BAR_POSITION_X, DEFAULT_SCALAR_BAR_POSITION_Y)
+        sb_rep.SetPosition2(DEFAULT_SCALAR_BAR_WIDTH, DEFAULT_SCALAR_BAR_HEIGHT)
         
         self.scalar_bar_widget.Off()
         self._current_scalar_bar_actor = None
@@ -119,16 +121,16 @@ class VTKWidget(QWidget):
         self._preview_plane_actor = vtk.vtkActor()
         self._preview_plane_actor.SetMapper(self._preview_plane_mapper)
         self._preview_plane_actor.GetProperty().SetColor(0.2, 0.4, 1.0)
-        self._preview_plane_actor.GetProperty().SetOpacity(0.4)
+        self._preview_plane_actor.GetProperty().SetOpacity(DEFAULT_PLANE_PREVIEW_OPACITY)
         self._preview_plane_actor.VisibilityOff()
         self.renderer.AddActor(self._preview_plane_actor)
         
         self._preview_arrow_source = vtk.vtkArrowSource()
-        self._preview_arrow_source.SetTipResolution(20)
-        self._preview_arrow_source.SetShaftResolution(20)
-        self._preview_arrow_source.SetTipLength(0.3)
-        self._preview_arrow_source.SetShaftRadius(0.05)
-        self._preview_arrow_source.SetTipRadius(0.15)
+        self._preview_arrow_source.SetTipResolution(DEFAULT_ARROW_RESOLUTION)
+        self._preview_arrow_source.SetShaftResolution(DEFAULT_ARROW_RESOLUTION)
+        self._preview_arrow_source.SetTipLength(DEFAULT_ARROW_TIP_LENGTH)
+        self._preview_arrow_source.SetShaftRadius(DEFAULT_ARROW_SHAFT_RADIUS)
+        self._preview_arrow_source.SetTipRadius(DEFAULT_ARROW_TIP_RADIUS)
         
         self._preview_arrow_mapper = vtk.vtkPolyDataMapper()
         self._preview_arrow_mapper.SetInputConnection(self._preview_arrow_source.GetOutputPort())

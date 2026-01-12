@@ -1,10 +1,10 @@
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 from PySide6.QtWidgets import (QMainWindow, QSplitter, QTabWidget, QTextEdit,
-                               QMenu, QToolButton, QFileDialog, QMessageBox, QToolBar,
+                               QFileDialog, QMessageBox, QToolBar,
                                QDialog, QDialogButtonBox, QFormLayout, QDoubleSpinBox, QLabel)
-from PySide6.QtGui import QAction
 from PySide6.QtCore import Qt
 from utils.logger import get_logger
+from utils.constants import DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, UI_REENABLE_DELAY_MS
 
 from views.vtk_widget import VTKWidget
 from views.pipeline_browser import PipelineBrowserWidget
@@ -14,6 +14,8 @@ from views.time_animation_widget import TimeAnimationWidget
 from views.tabbed_view_widget import TabbedViewWidget
 from views.table_view_widget import TableViewWidget
 from views.graph_view_widget import GraphViewWidget
+from views.menu_manager import MenuBarManager
+from views.toolbar_manager import ToolbarManager
 from viewmodels.pipeline_viewmodel import PipelineViewModel
 from viewmodels.vtk_viewmodel import VTKViewModel
 from viewmodels.chat_viewmodel import ChatViewModel
@@ -138,206 +140,64 @@ class MainWindow(QMainWindow):
         self._vtk_vm = vtk_vm
         self._chat_vm = chat_vm
         self._time_manager = TimeSeriesManager(self)
-        self._tab_vm = TabManagerViewModel() # Added TabManagerViewModel
+        self._tab_vm = TabManagerViewModel()
         
         # Initialize logger
         self.logger = get_logger("MainWindow")
         
-        # New: Tab tracking for tab-aware visualization
+        # Tab tracking for tab-aware visualization
         self._active_tab_id: Optional[str] = None
         self._active_tab_type: TabType = TabType.VTK
         self._tab_item_mapping: Dict[str, str] = {}  # {tab_id: item_id}
         
-        
         # Register TimeSeriesManager in app context for agent tool access
         set_time_series_manager(self._time_manager)
         
-        # Register TabManagerViewModel in app context for agent tool access (ADDED)
+        # Register TabManagerViewModel in app context for agent tool access
         set_tab_manager_viewmodel(self._tab_vm)
         
-        # NOW initialize the agent after all context is registered
+        # Initialize the agent after all context is registered
         self._chat_vm.initialize_agent()
         
-        
         self.setWindowTitle("Scientific Analysis Agent")
-        self.resize(1400, 900)
+        self.resize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT)
         
-        self._setup_menu_bar()
-        self._setup_toolbar()
+        # Initialize managers
+        self._menu_manager = MenuBarManager(
+            main_window=self,
+            pipeline_vm=self._pipeline_vm,
+            on_load_file=self._on_load_file,
+            on_apply_filter=self._on_apply_filter,
+            create_tab=self._create_tab_from_menu,
+        )
+        self._toolbar_manager = ToolbarManager(
+            main_window=self,
+            vtk_vm=self._vtk_vm,
+            pipeline_vm=self._pipeline_vm,
+            on_camera_view=self._on_camera_view,
+            on_fit_range=self._on_fit_range,
+            on_custom_range=self._on_custom_range,
+        )
+        
+        self._menu_manager.setup()
+        self._toolbar = self._toolbar_manager.setup()
+        self._setup_time_animation_toolbar()
         self._setup_main_layout()
         self._connect_signals()
         self._initialize()
-    
-    def _setup_menu_bar(self) -> None:
-        """Setup the menu bar."""
-        menu_bar = self.menuBar()
-        
-        file_menu = menu_bar.addMenu("File")
-        
-        load_action = QAction("Load Data...", self)
-        load_action.setShortcut("Ctrl+O")
-        load_action.triggered.connect(self._on_load_file)
-        file_menu.addAction(load_action)
-        
-        exit_action = QAction("Exit", self)
-        exit_action.setShortcut("Ctrl+Q")
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
-        
-        filters_menu = menu_bar.addMenu("Filters")
-        self._populate_filters_menu(filters_menu)
-        
-        # View menu for creating tabs
-        view_menu = menu_bar.addMenu("View")
-        
-        new_3d_tab_action = QAction("New 3D View Tab", self)
-        new_3d_tab_action.triggered.connect(lambda: self._create_tab_from_menu("vtk", "3D View"))
-        view_menu.addAction(new_3d_tab_action)
-        
-        new_table_tab_action = QAction("New Table View Tab", self)
-        new_table_tab_action.triggered.connect(lambda: self._create_tab_from_menu("table", "Table"))
-        view_menu.addAction(new_table_tab_action)
-        
-        new_graph_tab_action = QAction("New Graph View Tab", self)
-        new_graph_tab_action.triggered.connect(lambda: self._create_tab_from_menu("graph", "Graph"))
-        view_menu.addAction(new_graph_tab_action)
-    
-    def _populate_filters_menu(self, menu: QMenu) -> None:
-        """Populate filters menu from registry."""
-        for filter_type, display_name in self._pipeline_vm.get_available_filters():
-            action = QAction(display_name, self)
-            action.triggered.connect(
-                lambda checked=False, ft=filter_type: self._on_apply_filter(ft)
-            )
-            menu.addAction(action)
-    
-    def _setup_toolbar(self) -> None:
-        """Setup the toolbar."""
-        self._toolbar = self.addToolBar("View Controls")
-        toolbar = self._toolbar
-        
-        action_camera = toolbar.addAction("Camera View")
-        action_camera.triggered.connect(self._on_camera_view)
-        
-        action_reset = toolbar.addAction("Home (Reset)")
-        action_reset.triggered.connect(self._vtk_vm.reset_camera)
-        
-        toolbar.addSeparator()
-        
-        action_xy = toolbar.addAction("XY Plane")
-        action_xy.triggered.connect(lambda: self._vtk_vm.set_view_plane("xy"))
-        
-        action_yz = toolbar.addAction("YZ Plane")
-        action_yz.triggered.connect(lambda: self._vtk_vm.set_view_plane("yz"))
-        
-        action_xz = toolbar.addAction("XZ Plane")
-        action_xz.triggered.connect(lambda: self._vtk_vm.set_view_plane("xz"))
-        
-        toolbar.addSeparator()
-        
-        action_fit_range = toolbar.addAction("Fit Range")
-        action_fit_range.triggered.connect(self._on_fit_range)
-        
-        action_custom_range = toolbar.addAction("Custom Range")
-        action_custom_range.triggered.connect(self._on_custom_range)
-        
-        toolbar.addSeparator()
-        
-        self._setup_background_menu(toolbar)
-        self._setup_representation_menu(toolbar)
-        
-        self._setup_time_animation_toolbar()
-    
-    def _setup_background_menu(self, toolbar) -> None:
-        """Setup background color dropdown."""
-        bg_btn = QToolButton()
-        bg_btn.setText("Background")
-        bg_btn.setPopupMode(QToolButton.InstantPopup)
-        bg_btn.setStyleSheet(
-            "QToolButton { padding-right: 15px; } "
-            "QToolButton::menu-indicator { subcontrol-origin: padding; subcontrol-position: center right; }"
-        )
-        
-        bg_menu = QMenu(self)
-        for name, c1, c2 in self._vtk_vm.BACKGROUND_PRESETS:
-            action = bg_menu.addAction(name)
-            action.triggered.connect(
-                lambda checked=False, n=name: self._vtk_vm.set_background_preset(n)
-            )
-            
-        bg_btn.setMenu(bg_menu)
-        toolbar.addWidget(bg_btn)
-        
-        # Sync with ViewModel
-        self._vtk_vm.background_preset_changed.connect(
-            lambda name: bg_btn.setText(name)
-        )
-        # Initialize
-        current_name = self._vtk_vm._current_background[0]
-        bg_btn.setText(current_name)
-    
-    def _setup_representation_menu(self, toolbar) -> None:
-        """Setup representation style dropdown."""
-        rep_btn = QToolButton()
-        rep_btn.setText("Representation")
-        rep_btn.setPopupMode(QToolButton.InstantPopup)
-        rep_btn.setStyleSheet(
-            "QToolButton { padding-right: 15px; } "
-            "QToolButton::menu-indicator { subcontrol-origin: padding; subcontrol-position: center right; }"
-        )
-        
-        rep_menu = QMenu(self)
-        for style in self._vtk_vm.REPRESENTATION_STYLES:
-            action = rep_menu.addAction(style)
-            action.triggered.connect(
-                lambda checked=False, s=style: self._set_selected_item_representation(s)
-            )
-        
-        rep_btn.setMenu(rep_menu)
-        toolbar.addWidget(rep_btn)
-        
-        # Sync with ViewModel
-        # Sync with ViewModel (Item based sync)
-        self._pipeline_vm.item_style_changed.connect(
-            lambda item_id, style: self._on_item_style_changed(rep_btn, item_id, style)
-        )
-        self._pipeline_vm.selection_changed.connect(
-            lambda item: self._on_item_selected_for_toolbar(rep_btn, item)
-        )
-        
-    def _set_selected_item_representation(self, style: str) -> None:
-        """Set representation for selected item via Toolbar."""
-        selected = self._pipeline_vm.selected_item
-        if selected:
-            # This triggers item_style_changed -> updates toolbar & properties panel
-            self._pipeline_vm.set_representation(selected.id, style)
-            self._vtk_vm.request_render()
 
-    def _on_item_style_changed(self, btn: QToolButton, item_id: str, style: str) -> None:
-        """Handle item representation change."""
-        # Update Toolbar if selected item changed
-        selected = self._pipeline_vm.selected_item
-        if selected and selected.id == item_id:
-            btn.setText(style)
-            # Update Properties Panel Combo (without triggering apply loop)
-            # PropertiesPanel handles 'representation_style_changed' internally? 
-            # No, PropertiesPanel listens to its own UI. We need to push update to it.
-            # But PropertiesPanel reloads from item if we call set_item? No that's too heavy.
-            # We need a way to just update the combo text.
-            self._properties_panel.update_representation_indicator(style)
-
-    def _on_item_selected_for_toolbar(self, btn: QToolButton, item: Any) -> None:
-        """Update toolbar when selection changes."""
-        if item:
-            style = self._vtk_vm.get_representation_style(item.actor)
-            btn.setText(style)
-    
     def _setup_time_animation_toolbar(self) -> None:
         """Setup time animation toolbar."""
         time_toolbar = self.addToolBar("Time Animation")
         
         self._time_animation_widget = TimeAnimationWidget(self._time_manager)
         time_toolbar.addWidget(self._time_animation_widget)
+    
+    def _on_item_style_changed_for_properties(self, item_id: str, style: str) -> None:
+        """Update properties panel when item style changes via toolbar."""
+        selected = self._pipeline_vm.selected_item
+        if selected and selected.id == item_id:
+            self._properties_panel.update_representation_indicator(style)
     
     def _setup_main_layout(self) -> None:
         """Setup the main layout with splitters."""
@@ -473,6 +333,9 @@ class MainWindow(QMainWindow):
         self._tab_vm.tab_close_requested.connect(self._handle_tab_close_request)
         self._tab_vm.tab_pin_requested.connect(self._handle_tab_pin_request)
         
+        # Toolbar style changes -> properties panel sync
+        self._pipeline_vm.item_style_changed.connect(self._on_item_style_changed_for_properties)
+        
         self._time_manager.time_changed.connect(self._on_time_step_changed)
     
     def _disable_ui_interaction(self) -> None:
@@ -516,7 +379,7 @@ class MainWindow(QMainWindow):
         from PySide6.QtCore import QTimer
         
         # Small delay to ensure no flickering
-        QTimer.singleShot(100, self._perform_ui_reenable)
+        QTimer.singleShot(UI_REENABLE_DELAY_MS, self._perform_ui_reenable)
 
     def _perform_ui_reenable(self) -> None:
         from PySide6.QtWidgets import QApplication
