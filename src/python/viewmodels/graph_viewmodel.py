@@ -5,6 +5,7 @@ from vtk.util.numpy_support import vtk_to_numpy
 
 from utils.logger import get_logger
 from utils.app_context import get_pipeline_viewmodel
+from utils.vtk_types import VTKArray
 
 logger = get_logger("GraphVM")
 
@@ -224,7 +225,7 @@ class GraphViewModel(QObject):
                 
         return success_any
     
-    def _extract_component(self, vtk_array, component: int, num_tuples: int) -> np.ndarray:
+    def _extract_component(self, vtk_array: VTKArray, component: int, num_tuples: int) -> np.ndarray:
         """Extract a single component from a VTK array."""
         try:
             # Zero-copy conversion to numpy

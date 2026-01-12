@@ -1,9 +1,10 @@
 import vtk
 from vtk.util import numpy_support
-from typing import Any, Tuple, List
+from typing import Any, Tuple, List, Optional
 import numpy as np
 from utils.logger import get_logger, log_execution
 from utils.constants import DEFAULT_GAUSSIAN_SCALE_FACTOR, DEFAULT_POINT_SIZE, DEFAULT_LINE_WIDTH
+from utils.vtk_types import VTKActor, VTKDataSet, VTKMapper, VTKLookupTable
 
 logger = get_logger("VTKRender")
 

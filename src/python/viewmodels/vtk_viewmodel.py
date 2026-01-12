@@ -3,6 +3,7 @@ from typing import Tuple, List, Any, Optional
 from services.vtk_render_service import VTKRenderService
 from utils.logger import get_logger
 from utils.tool_registry import expose_tool
+from utils.vtk_types import VTKActor
 
 logger = get_logger("VTKVM")
 
@@ -15,14 +16,14 @@ class VTKViewModel(QObject):
     background_preset_changed = Signal(str)     # preset_name
     camera_reset_requested = Signal()
     view_plane_requested = Signal(str)  # "xy", "yz", "xz"
-    actor_added = Signal(object)  # actor
-    actor_removed = Signal(object)  # actor
-    actor_visibility_changed = Signal(object, bool)  # actor, visible
+    actor_added = Signal(VTKActor)  # actor
+    actor_removed = Signal(VTKActor)  # actor
+    actor_visibility_changed = Signal(VTKActor, bool)  # actor, visible
     representation_changed = Signal(str) # style
     clear_scene_requested = Signal()
     plane_preview_requested = Signal(list, list, tuple)  # origin, normal, bounds
     plane_preview_hide_requested = Signal()
-    scalar_bar_update_requested = Signal(object)  # actor
+    scalar_bar_update_requested = Signal(VTKActor)  # actor
     scalar_bar_hide_requested = Signal()
     legend_settings_changed = Signal(dict)  # legend settings dictionary
     
@@ -129,19 +130,19 @@ class VTKViewModel(QObject):
             return f"Set view to {plane.upper()} plane."
         return f"Invalid plane '{plane}'. Use 'xy', 'yz', or 'xz'."
     
-    def add_actor(self, actor: Any) -> None:
+    def add_actor(self, actor: VTKActor) -> None:
         """Request actor to be added to renderer."""
         self.actor_added.emit(actor)
         self.render_requested.emit()
         logger.info(f"Actor added: {id(actor)}")
     
-    def remove_actor(self, actor: Any) -> None:
+    def remove_actor(self, actor: VTKActor) -> None:
         """Request actor to be removed from renderer."""
         self.actor_removed.emit(actor)
         self.render_requested.emit()
         logger.info(f"Actor removed: {id(actor)}")
     
-    def set_actor_visibility(self, actor: Any, visible: bool) -> None:
+    def set_actor_visibility(self, actor: VTKActor, visible: bool) -> None:
         """Request actor visibility change."""
         self.actor_visibility_changed.emit(actor, visible)
         self.render_requested.emit()
@@ -173,7 +174,7 @@ class VTKViewModel(QObject):
         """Request to hide plane preview."""
         self.plane_preview_hide_requested.emit()
     
-    def update_scalar_bar(self, actor: Any) -> None:
+    def update_scalar_bar(self, actor: VTKActor) -> None:
         """Request scalar bar update for actor."""
         self.scalar_bar_update_requested.emit(actor)
     

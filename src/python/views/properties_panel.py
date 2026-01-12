@@ -363,7 +363,14 @@ class PropertiesPanel(QWidget):
         group = QGroupBox("Coloring & Range")
         layout = QVBoxLayout(group)
         
-        # 1. Color By Row
+        self._add_coloring_controls(layout, current_array, current_component, scalar_visible)
+        self._add_range_controls(layout)
+        
+        self._vtk_layout.addWidget(group)
+
+    def _add_coloring_controls(self, layout: QVBoxLayout, current_array: str, 
+                             current_component: str, scalar_visible: bool) -> None:
+        """Add coloring controls (Color By, Component)."""
         color_row = QHBoxLayout()
         main_combo = QComboBox()
         main_combo.addItem("Solid Color", ("__SolidColor__", None, None))
@@ -451,9 +458,10 @@ class PropertiesPanel(QWidget):
         
         color_row.addWidget(main_combo)
         color_row.addWidget(component_combo)
-        layout.addLayout(color_row) # Add color row to main layout
-        
-        # 2. Range Controls
+        layout.addLayout(color_row)
+
+    def _add_range_controls(self, layout: QVBoxLayout) -> None:
+        """Add range controls (Fit Range, Custom Range)."""
         range_layout = QFormLayout()
         
         # Fit Range Button
@@ -500,8 +508,6 @@ class PropertiesPanel(QWidget):
         range_layout.addRow("Custom Range:", custom_range_row)
         
         layout.addLayout(range_layout)
-        
-        self._vtk_layout.addWidget(group)
     
     def _on_apply_clicked(self) -> None:
         """Handle apply button click."""

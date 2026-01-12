@@ -2,6 +2,8 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional, Tuple
 import uuid
 
+from utils.vtk_types import VTKDataSet, VTKActor
+
 
 @dataclass
 class ColorByInfo:
@@ -22,8 +24,8 @@ class PipelineItem:
     name: str
     item_type: str  # "source", "slice_filter", "contour_filter", etc.
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    vtk_data: Any = None
-    actor: Any = None
+    vtk_data: VTKDataSet = None
+    actor: VTKActor = None
     visible: bool = True
     parent_id: str | None = None  # Actual data input source (for filter logic)
     display_parent_id: str | None = None  # UI tree parent (for display hierarchy)
