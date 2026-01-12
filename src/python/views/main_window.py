@@ -889,6 +889,56 @@ class MainWindow(QMainWindow):
         self._chat_panel.set_input_enabled(enabled)
         self._vtk_widget.set_interaction_enabled(enabled)
     
+    # ==================== VTK Widget Signal Helpers ====================
+    
+    def _connect_vtk_widget_signals(self, widget: "VTKWidget") -> None:
+        """Connect all VTK-related signals to a widget."""
+        self._vtk_vm.render_requested.connect(widget.render)
+        self._vtk_vm.actor_added.connect(widget.add_actor)
+        self._vtk_vm.actor_removed.connect(widget.remove_actor)
+        self._vtk_vm.actor_visibility_changed.connect(widget.set_actor_visibility)
+        self._vtk_vm.clear_scene_requested.connect(widget.clear_scene)
+        self._vtk_vm.background_changed.connect(widget.set_background)
+        self._vtk_vm.camera_reset_requested.connect(widget.reset_camera)
+        self._vtk_vm.view_plane_requested.connect(widget.set_view_plane)
+        self._vtk_vm.plane_preview_requested.connect(widget.update_plane_preview)
+        self._vtk_vm.plane_preview_hide_requested.connect(widget.hide_plane_preview)
+        self._vtk_vm.camera_apply_requested.connect(widget.apply_camera_state)
+        self._vtk_vm.scalar_bar_update_requested.connect(widget.update_scalar_bar)
+        self._vtk_vm.scalar_bar_hide_requested.connect(widget.hide_scalar_bar)
+        self._vtk_vm.legend_settings_changed.connect(widget.apply_legend_settings)
+        self._chat_vm.render_requested.connect(widget.render)
+    
+    def _disconnect_vtk_widget_signals(self, widget: "VTKWidget") -> None:
+        """Disconnect all VTK-related signals from a widget."""
+        try:
+            self._vtk_vm.render_requested.disconnect(widget.render)
+            self._vtk_vm.actor_added.disconnect(widget.add_actor)
+            self._vtk_vm.actor_removed.disconnect(widget.remove_actor)
+            self._vtk_vm.actor_visibility_changed.disconnect(widget.set_actor_visibility)
+            self._vtk_vm.clear_scene_requested.disconnect(widget.clear_scene)
+            self._vtk_vm.background_changed.disconnect(widget.set_background)
+            self._vtk_vm.camera_reset_requested.disconnect(widget.reset_camera)
+            self._vtk_vm.view_plane_requested.disconnect(widget.set_view_plane)
+            self._vtk_vm.plane_preview_requested.disconnect(widget.update_plane_preview)
+            self._vtk_vm.plane_preview_hide_requested.disconnect(widget.hide_plane_preview)
+            self._vtk_vm.camera_apply_requested.disconnect(widget.apply_camera_state)
+            self._vtk_vm.scalar_bar_update_requested.disconnect(widget.update_scalar_bar)
+            self._vtk_vm.scalar_bar_hide_requested.disconnect(widget.hide_scalar_bar)
+            self._vtk_vm.legend_settings_changed.disconnect(widget.apply_legend_settings)
+            self._chat_vm.render_requested.disconnect(widget.render)
+        except (RuntimeError, TypeError) as e:
+            # Signal might not be connected or already disconnected
+            self.logger.debug(f"Signal disconnection info: {e}")
+
+    def _initialize_vtk_widget_with_data(self, widget: "VTKWidget") -> None:
+        """Add existing pipeline actors and initialize a VTK widget."""
+        for item in self._pipeline_vm.items.values():
+            if item.actor and item.visible:
+                widget.add_actor(item.actor)
+        widget.reset_camera()
+        widget.render()
+    
     def _on_tab_created(self, tab_id: str, tab_type: str, tab_name: str) -> None:
         """Handle new tab creation request."""
         self.logger.info(f"Creating new tab: type={tab_type}, name={tab_name}, id={tab_id}")
@@ -898,29 +948,8 @@ class MainWindow(QMainWindow):
         if tab_type == "vtk":
             # Create new VTK widget
             widget = VTKWidget()
-            # Connect to VTK viewmodel
-            self._vtk_vm.render_requested.connect(widget.render)
-            self._vtk_vm.actor_added.connect(widget.add_actor)
-            self._vtk_vm.actor_removed.connect(widget.remove_actor)
-            self._vtk_vm.actor_visibility_changed.connect(widget.set_actor_visibility)
-            self._vtk_vm.clear_scene_requested.connect(widget.clear_scene)
-            self._vtk_vm.background_changed.connect(widget.set_background)
-            self._vtk_vm.camera_reset_requested.connect(widget.reset_camera)
-            self._vtk_vm.view_plane_requested.connect(widget.set_view_plane)
-            self._vtk_vm.plane_preview_requested.connect(widget.update_plane_preview)
-            self._vtk_vm.plane_preview_hide_requested.connect(widget.hide_plane_preview)
-            self._vtk_vm.camera_apply_requested.connect(widget.apply_camera_state)
-            self._vtk_vm.scalar_bar_update_requested.connect(widget.update_scalar_bar)
-            self._vtk_vm.scalar_bar_hide_requested.connect(widget.hide_scalar_bar)
-            self._vtk_vm.legend_settings_changed.connect(widget.apply_legend_settings)
-            self._chat_vm.render_requested.connect(widget.render)
-            
-            # Add existing pipeline actors to the new VTK widget
-            for item in self._pipeline_vm.items.values():
-                if item.actor and item.visible:
-                    widget.add_actor(item.actor)
-            widget.reset_camera()
-            widget.render()
+            self._connect_vtk_widget_signals(widget)
+            self._initialize_vtk_widget_with_data(widget)
             
         elif tab_type == "table":
             # Create table viewmodel and widget
@@ -953,25 +982,8 @@ class MainWindow(QMainWindow):
         # Get widget before cleanup to disconnect signals
         widget = self._tabbed_view.get_tab_widget_by_id(tab_id)
         if widget and hasattr(widget, 'render'):  # Likely a VTKWidget
-            try:
-                self._vtk_vm.render_requested.disconnect(widget.render)
-                self._vtk_vm.actor_added.disconnect(widget.add_actor)
-                self._vtk_vm.actor_removed.disconnect(widget.remove_actor)
-                self._vtk_vm.actor_visibility_changed.disconnect(widget.set_actor_visibility)
-                self._vtk_vm.clear_scene_requested.disconnect(widget.clear_scene)
-                self._vtk_vm.background_changed.disconnect(widget.set_background)
-                self._vtk_vm.camera_reset_requested.disconnect(widget.reset_camera)
-                self._vtk_vm.view_plane_requested.disconnect(widget.set_view_plane)
-                self._vtk_vm.plane_preview_requested.disconnect(widget.update_plane_preview)
-                self._vtk_vm.plane_preview_hide_requested.disconnect(widget.hide_plane_preview)
-                self._vtk_vm.camera_apply_requested.disconnect(widget.apply_camera_state)
-                self._vtk_vm.scalar_bar_update_requested.disconnect(widget.update_scalar_bar)
-                self._vtk_vm.scalar_bar_hide_requested.disconnect(widget.hide_scalar_bar)
-                self._vtk_vm.legend_settings_changed.disconnect(widget.apply_legend_settings)
-                self.logger.info(f"Disconnected all pipeline signals for VTK tab: {tab_id}")
-            except (RuntimeError, TypeError) as e:
-                # Signal might not be connected or already disconnected
-                self.logger.debug(f"Signal disconnection info for {tab_id}: {e}")
+            self._disconnect_vtk_widget_signals(widget)
+            self.logger.info(f"Disconnected all pipeline signals for VTK tab: {tab_id}")
         
         # Cleanup mapping
         if tab_id in self._tab_item_mapping:
@@ -1102,23 +1114,11 @@ class MainWindow(QMainWindow):
         # Create VTK widget
         widget = VTKWidget()
         
-        # Connect VTK VM signals
-        self._vtk_vm.render_requested.connect(widget.render)
-        self._vtk_vm.camera_reset_requested.connect(widget.reset_camera)
-        self._vtk_vm.plane_preview_requested.connect(widget.update_plane_preview)
-        self._vtk_vm.plane_preview_hide_requested.connect(widget.hide_plane_preview)
-        self._vtk_vm.camera_apply_requested.connect(widget.apply_camera_state)
-        self._vtk_vm.scalar_bar_update_requested.connect(widget.update_scalar_bar)
-        self._vtk_vm.scalar_bar_hide_requested.connect(widget.hide_scalar_bar)
-        self._vtk_vm.legend_settings_changed.connect(widget.apply_legend_settings)
-        self._chat_vm.render_requested.connect(widget.render)
+        # Connect VTK VM signals using helper
+        self._connect_vtk_widget_signals(widget)
         
-        # Add existing pipeline actors
-        for item in self._pipeline_vm.items.values():
-            if item.actor and item.visible:
-                widget.add_actor(item.actor)
-        widget.reset_camera()
-        widget.render()
+        # Add existing pipeline actors and initialize
+        self._initialize_vtk_widget_with_data(widget)
         
         # Add to tabbed view
         tab_id = self._tabbed_view.add_tab_with_id(widget, "vtk", tab_name, pinned=False)

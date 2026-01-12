@@ -40,8 +40,6 @@ class PropertiesPanel(QWidget):
         self._render_service: Optional["VTKRenderService"] = None
         self._filter_widget: Optional[QWidget] = None
         self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
-        
-        self._legend_settings: dict = DEFAULT_LEGEND_SETTINGS.copy()
         self._pending_changes = {}  # Store pending changes for batch apply
         
         self._active_tab_type: TabType = TabType.VTK  # Default

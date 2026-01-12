@@ -95,7 +95,6 @@ class StreamingAgentWorker(QThread):
                         description = interrupt_value.get("description", "")
                         fields = interrupt_value.get("fields", [])
                         state["waiting_for_input"] = True
-                        state["waiting_for_input"] = True
                         state["input_fields"] = fields
                         self.input_requested.emit(description, fields)
                         interrupt_handled = True
@@ -260,9 +259,6 @@ class ChatViewModel(QObject):
         # However, for simplicity with 'waiting_for_input' logic:
         # If we are NOT waiting for input, we start fresh or append.
         # If we ARE waiting for input, we should separate that logic (see submit_user_input).
-        
-        # This starting method is for NEW user messages.
-        self._waiting_for_input = False
         
         # This starting method is for NEW user messages.
         self._waiting_for_input = False

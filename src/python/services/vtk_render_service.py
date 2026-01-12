@@ -286,10 +286,12 @@ class VTKRenderService:
         """Get scalar range from actor's data."""
         mapper = actor.GetMapper()
         if not mapper:
+            logger.warning("get_data_scalar_range: Mapper missing")
             return None
         
         data = mapper.GetInput()
         if not data:
+            logger.warning("get_data_scalar_range: Mapper has no input data")
             return None
         
         array_name = mapper.GetArrayName()
