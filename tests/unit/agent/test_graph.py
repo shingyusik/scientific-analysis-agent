@@ -13,14 +13,21 @@ def mock_model():
     model.with_structured_output.return_value = structured
     return model, structured
 
-def test_guardrail_node_blocked(mock_model):
+@pytest.fixture
+def mock_tools():
+    tool1 = MagicMock()
+    tool1.name = "test_tool"
+    tool1.description = "A test tool for testing"
+    return [tool1]
+
+def test_guardrail_node_blocked(mock_model, mock_tools):
     model, structured = mock_model
     
     # Setup mock decision
     decision = GuardrailDecision(decision="blocked", reason="Off topic")
     structured.invoke.return_value = decision
     
-    node = create_guardrail_node(model)
+    node = create_guardrail_node(model, mock_tools)
     
     state = {"messages": [HumanMessage(content="Tell me a joke")]}
     result = node(state)
@@ -30,14 +37,14 @@ def test_guardrail_node_blocked(mock_model):
     assert isinstance(result["messages"][0], AIMessage)
     assert "죄송합니다" in result["messages"][0].content
 
-def test_guardrail_node_allowed(mock_model):
+def test_guardrail_node_allowed(mock_model, mock_tools):
     model, structured = mock_model
     
     # Setup mock decision
     decision = GuardrailDecision(decision="allowed", reason="Valid request")
     structured.invoke.return_value = decision
     
-    node = create_guardrail_node(model)
+    node = create_guardrail_node(model, mock_tools)
     
     state = {"messages": [HumanMessage(content="Load data")]}
     result = node(state)

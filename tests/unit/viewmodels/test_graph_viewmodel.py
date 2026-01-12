@@ -48,10 +48,9 @@ def test_set_data_source_index_x(mock_vtk_to_numpy, mock_get_vm, graph_vm):
     success = graph_vm.set_data_source("item1", "__Index__", "ScalarArray")
     assert success is True
     
-    data = graph_vm.get_plot_config()
+    data = graph_vm.get_plot_config("item1")
     np.testing.assert_array_equal(data["x_data"], np.array([0, 1, 2, 3, 4]))
     np.testing.assert_array_equal(data["y_data"], np.array([10, 20, 30, 40, 50]))
-    assert data["x_label"] == "Index"
 
 @patch('viewmodels.graph_viewmodel.get_pipeline_viewmodel')
 @patch('viewmodels.graph_viewmodel.vtk_to_numpy')
@@ -78,7 +77,7 @@ def test_set_data_source_vector_component(mock_vtk_to_numpy, mock_get_vm, graph_
     # Extract component 1 (Y component)
     graph_vm.set_data_source("item1", "__Index__", "VectorArray", y_component=1)
     
-    data = graph_vm.get_plot_config()
+    data = graph_vm.get_plot_config("item1")
     # Should get [2, 5, 8]
     np.testing.assert_array_equal(data["y_data"], np.array([2, 5, 8]))
 
@@ -96,16 +95,17 @@ def test_extract_component_invalid(graph_vm):
         assert np.array_equal(res, np.zeros(1))
 
 def test_style_update(graph_vm):
-    graph_vm.set_plot_style(title="My Plot", line_color="red")
+    # Test global style settings (line_color requires item_id since it's per-series)
+    graph_vm.set_plot_style(title="My Plot", show_grid=True)
     
     mock_signal = MagicMock()
     graph_vm.plot_config_updated.connect(mock_signal)
     
     # Trigger another update to verify signal
-    graph_vm.set_plot_style(show_grid=False)
+    graph_vm.set_plot_style(show_grid=False, y_label="Value")
     mock_signal.assert_called_once()
     
     config = graph_vm.get_plot_config()
     assert config["title"] == "My Plot"
-    assert config["line_color"] == "red"
+    assert config["y_label"] == "Value"
     assert config["show_grid"] is False

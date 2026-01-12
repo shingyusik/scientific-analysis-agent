@@ -270,6 +270,8 @@ class GraphViewModel(QObject):
                 "array_type": src["array_type"],
                 "x_component": src["x_component"],
                 "y_component": src["y_component"],
+                "x_data": src["x_data"],
+                "y_data": src["y_data"],
                 "line_color": src["line_color"],
                 "line_width": src["line_width"],
                 "marker_style": src["marker_style"],
