@@ -3,6 +3,7 @@ from vtk.util import numpy_support
 from typing import Any, Tuple, List
 import numpy as np
 from utils.logger import get_logger, log_execution
+from utils.constants import DEFAULT_GAUSSIAN_SCALE_FACTOR, DEFAULT_POINT_SIZE, DEFAULT_LINE_WIDTH
 
 logger = get_logger("VTKRender")
 
@@ -124,7 +125,7 @@ class VTKRenderService:
                 new_mapper.SetInputData(data)
                 new_mapper.SetSourceConnection(sphere.GetOutputPort())
                 new_mapper.SetScaleModeToNoDataScaling()
-                new_mapper.SetScaleFactor(0.05)
+                new_mapper.SetScaleFactor(DEFAULT_GAUSSIAN_SCALE_FACTOR)
                 
                 actor.SetMapper(new_mapper)
             prop.SetRepresentationToSurface()

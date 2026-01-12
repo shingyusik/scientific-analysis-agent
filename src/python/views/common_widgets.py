@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 from PySide6.QtCore import Qt, Signal
 from typing import List, Tuple
 import numpy as np
+from utils.constants import OFFSET_LIST_MIN_WIDTH
 
 
 class ScientificDoubleSpinBox(QDoubleSpinBox):
@@ -27,7 +28,7 @@ class GenerateSeriesDialog(QDialog):
     def __init__(self, min_val: float = -1.0, max_val: float = 1.0, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Generate Number Series")
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(OFFSET_LIST_MIN_WIDTH)
         
         self._min_val = min_val
         self._max_val = max_val

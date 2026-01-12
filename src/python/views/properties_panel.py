@@ -7,7 +7,7 @@ from PySide6.QtGui import QColor
 from typing import Optional, List, Tuple, TYPE_CHECKING
 from models.pipeline_item import PipelineItem
 from views.common_widgets import ScientificDoubleSpinBox
-from views.vtk_widget import DEFAULT_LEGEND_SETTINGS
+from utils.constants import DEFAULT_LEGEND_SETTINGS, RESET_BUTTON_WIDTH, SPINBOX_WIDTH
 from views.table_properties_widget import TablePropertiesWidget
 from views.graph_properties_widget import GraphPropertiesWidget
 from models.tab_types import TabType
@@ -626,7 +626,7 @@ class PropertiesPanel(QWidget):
         spin.setValue(current_opacity)
         
         reset_btn = QPushButton("Reset")
-        reset_btn.setFixedWidth(50)
+        reset_btn.setFixedWidth(RESET_BUTTON_WIDTH)
         
         def update_opacity(val):
             slider.blockSignals(True)
@@ -659,7 +659,7 @@ class PropertiesPanel(QWidget):
         spin.setValue(current_size)
         
         reset_btn = QPushButton("Reset")
-        reset_btn.setFixedWidth(50)
+        reset_btn.setFixedWidth(RESET_BUTTON_WIDTH)
         
         def update_size(val):
             self._pending_changes["point_size"] = val
@@ -684,7 +684,7 @@ class PropertiesPanel(QWidget):
         spin.setValue(current_width)
         
         reset_btn = QPushButton("Reset")
-        reset_btn.setFixedWidth(50)
+        reset_btn.setFixedWidth(RESET_BUTTON_WIDTH)
         
         def update_width(val):
             self._pending_changes["line_width"] = val
@@ -710,7 +710,7 @@ class PropertiesPanel(QWidget):
         spin.setValue(current_scale)
         
         reset_btn = QPushButton("Reset")
-        reset_btn.setFixedWidth(50)
+        reset_btn.setFixedWidth(RESET_BUTTON_WIDTH)
         
         def update_scale(val):
             self._pending_changes["gaussian_scale"] = val

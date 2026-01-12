@@ -10,6 +10,7 @@ import vtk
 from utils.logger import get_logger, log_execution
 from utils.tool_registry import expose_tool, expose_filter_tool
 from utils.app_context import get_pipeline_viewmodel
+from utils.constants import RESET_BUTTON_WIDTH, SPINBOX_WIDTH
 
 logger = get_logger("FilterOps")
 
@@ -192,7 +193,7 @@ class SliceFilter(FilterBase):
         origin_spins = []
         for i, label in enumerate(["X", "Y", "Z"]):
             spin = ScientificDoubleSpinBox()
-            spin.setFixedWidth(100)
+            spin.setFixedWidth(SPINBOX_WIDTH)
             spin.setValue(params.origin[i])
             spin.valueChanged.connect(lambda v, idx=i: self._on_origin_changed(idx, v, item))
             origin_row.addWidget(QLabel(label))
@@ -200,7 +201,7 @@ class SliceFilter(FilterBase):
             origin_spins.append(spin)
         
         origin_reset_btn = QPushButton("Reset")
-        origin_reset_btn.setFixedWidth(50)
+        origin_reset_btn.setFixedWidth(RESET_BUTTON_WIDTH)
         origin_reset_btn.clicked.connect(lambda: self._reset_origin(origin_spins, item))
         origin_row.addWidget(origin_reset_btn)
         origin_row.addStretch()
@@ -211,7 +212,7 @@ class SliceFilter(FilterBase):
         normal_spins = []
         for i, label in enumerate(["X", "Y", "Z"]):
             spin = ScientificDoubleSpinBox()
-            spin.setFixedWidth(100)
+            spin.setFixedWidth(SPINBOX_WIDTH)
             spin.setRange(-1, 1)
             spin.setValue(params.normal[i])
             spin.valueChanged.connect(lambda v, idx=i: self._on_normal_changed(idx, v, item))
@@ -220,7 +221,7 @@ class SliceFilter(FilterBase):
             normal_spins.append(spin)
         
         normal_reset_btn = QPushButton("Reset")
-        normal_reset_btn.setFixedWidth(50)
+        normal_reset_btn.setFixedWidth(RESET_BUTTON_WIDTH)
         normal_reset_btn.clicked.connect(lambda: self._reset_normal(normal_spins, item))
         normal_row.addWidget(normal_reset_btn)
         normal_row.addStretch()

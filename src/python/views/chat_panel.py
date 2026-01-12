@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Signal, Qt, QTimer
 from PySide6.QtGui import QCursor
+from utils.constants import CHAT_BUBBLE_MAX_WIDTH, CHAT_TOOL_PREVIEW_LENGTH, SCROLL_TO_BOTTOM_DELAY_MS
 
 
 class CollapsibleToolSection(QFrame):
@@ -27,7 +28,7 @@ class CollapsibleToolSection(QFrame):
         self._container = QFrame()
         self._container.setFrameShape(QFrame.Shape.StyledPanel)
         self._container.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
-        self._container.setMaximumWidth(400)
+        self._container.setMaximumWidth(CHAT_BUBBLE_MAX_WIDTH)
         self._container.setStyleSheet("""
             QFrame {
                 background-color: #f5f0e8;
@@ -100,7 +101,7 @@ class CollapsibleToolSection(QFrame):
         if "호출 중" in result:
             text = f"<span style='color: #888;'>⏳ {tool_name}: {result}</span>"
         else:
-            preview = result[:80] + "..." if len(result) > 80 else result
+            preview = result[:CHAT_TOOL_PREVIEW_LENGTH] + "..." if len(result) > CHAT_TOOL_PREVIEW_LENGTH else result
             preview = preview.replace('\n', ' ')
             text = f"<span style='color: #555;'>✓ {tool_name}: {preview}</span>"
         
@@ -166,7 +167,7 @@ class MessageBubble(QFrame):
         bubble = QFrame()
         bubble.setFrameShape(QFrame.Shape.StyledPanel)
         bubble.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Minimum)
-        bubble.setMaximumWidth(400)
+        bubble.setMaximumWidth(CHAT_BUBBLE_MAX_WIDTH)
         
         if is_user:
             bubble.setStyleSheet("""
@@ -288,7 +289,7 @@ class InputFormBubble(QFrame):
         bubble = QFrame()
         bubble.setFrameShape(QFrame.Shape.StyledPanel)
         bubble.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-        bubble.setMaximumWidth(400)
+        bubble.setMaximumWidth(CHAT_BUBBLE_MAX_WIDTH)
         bubble.setStyleSheet("""
             QFrame {
                 background-color: #fce4ec;
