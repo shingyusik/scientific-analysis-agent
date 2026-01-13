@@ -712,11 +712,32 @@ class MainWindow(QMainWindow):
     def _on_time_step_changed(self, item_id: str, time_index: int) -> None:
         """Handle time step change from time manager."""
         self._pipeline_vm.update_time_step(item_id, time_index)
-        self._vtk_vm.request_render()
         
+        # Get the changed item
         item = self._pipeline_vm.items.get(item_id)
-        if item:
-            self._info_page.setPlainText(item.get_info_string())
+        if not item:
+            return
+        
+        # Update only the currently active tab
+        if self._active_tab_type == TabType.VTK:
+            # Render view: only update if VTK tab is active and item is visible
+            if item.visible:
+                self._vtk_vm.request_render()
+        elif self._active_tab_type == TabType.TABLE:
+            # Table view: only update if Table tab is active and showing this item
+            widget = self._tabbed_view.get_active_tab_widget()
+            if widget and hasattr(widget, 'viewmodel'):
+                if widget.viewmodel.source_item_id == item_id:
+                    widget.viewmodel.refresh_data()
+        elif self._active_tab_type == TabType.GRAPH:
+            # Graph view: only update if Graph tab is active and has this item
+            widget = self._tabbed_view.get_active_tab_widget()
+            if widget and hasattr(widget, 'viewmodel'):
+                if item_id in widget.viewmodel._data_sources:
+                    widget.viewmodel.refresh_data()
+        
+        # Always update info page
+        self._info_page.setPlainText(item.get_info_string())
     
     def _update_time_animation_widget(self, item) -> None:
         """Update time animation widget for selected item."""
@@ -965,8 +986,29 @@ class MainWindow(QMainWindow):
         if selected_item:
             # Re-trigger selection change logic to update the current tab's specific view
             self._on_selection_changed(selected_item)
+            
+            # Additionally, refresh the current tab's data to ensure it's up-to-date
+            self._refresh_active_tab_data()
         else:
             self._clear_active_tab_display()
+    
+    def _refresh_active_tab_data(self) -> None:
+        """Refresh data for the currently active tab."""
+        widget = self._tabbed_view.get_active_tab_widget()
+        if not widget or not hasattr(widget, 'viewmodel'):
+            return
+        
+        if self._active_tab_type == TabType.TABLE:
+            # Refresh table data
+            if hasattr(widget.viewmodel, 'refresh_data'):
+                widget.viewmodel.refresh_data()
+        elif self._active_tab_type == TabType.GRAPH:
+            # Refresh graph data
+            if hasattr(widget.viewmodel, 'refresh_data'):
+                widget.viewmodel.refresh_data()
+        elif self._active_tab_type == TabType.VTK:
+            # Refresh render view
+            self._vtk_vm.request_render()
 
     # ==================== Tab Management Handlers (From PipelineVM signals) ====================
     

@@ -20,7 +20,7 @@ class TableViewModel(QObject):
         self._source_item_id: Optional[str] = None
         self._array_type: str = "POINT"  # POINT or CELL
         self._is_visible: bool = True
-        self._data_rows: List[List[Any]] = []
+        self._data_array: Optional[np.ndarray] = None
         self._column_headers: List[str] = []
         
     @property
@@ -38,7 +38,7 @@ class TableViewModel(QObject):
             self.refresh_data()
         else:
             # Clear data visual but keep configuration
-            self._data_rows = []
+            self._data_array = None
             self.data_updated.emit()
     
     def set_data_source(self, item_id: str, array_type: str = "POINT") -> bool:
@@ -49,7 +49,7 @@ class TableViewModel(QObject):
         self._array_type = array_type
         
         if not self._is_visible:
-            self._data_rows = []
+            self._data_array = None
             self.data_updated.emit()
             return True
 
@@ -116,13 +116,11 @@ class TableViewModel(QObject):
         # Stack all columns efficiently
         if len(cols_data) > 1:
             # Use column_stack to create the matrix
-            full_data = np.column_stack(cols_data)
-            # Convert to list of lists for compatibility with existing view logic
-            self._data_rows = full_data.tolist()
+            self._data_array = np.column_stack(cols_data)
         else:
-            self._data_rows = [[x] for x in cols_data[0]]
+            self._data_array = cols_data[0].reshape(-1, 1)
         
-        logger.info(f"Table data loaded (Optimized): {len(self._data_rows)} rows, {len(self._column_headers)} columns")
+        logger.info(f"Table data loaded: {self._data_array.shape[0]} rows, {self._data_array.shape[1]} columns")
         self.data_updated.emit()
         return True
         
@@ -132,9 +130,9 @@ class TableViewModel(QObject):
             return False
         return self.set_data_source(self._source_item_id, self._array_type)
     
-    def get_table_data(self) -> List[List[Any]]:
-        """Return table rows (including index column)."""
-        return self._data_rows
+    def get_table_data(self) -> Optional[np.ndarray]:
+        """Return table data as NumPy array."""
+        return self._data_array
     
     def get_column_headers(self) -> List[str]:
         """Return column names."""
@@ -142,7 +140,7 @@ class TableViewModel(QObject):
     
     def get_row_count(self) -> int:
         """Return number of data rows."""
-        return len(self._data_rows)
+        return 0 if self._data_array is None else self._data_array.shape[0]
     
     def get_column_count(self) -> int:
         """Return number of columns."""
@@ -158,6 +156,10 @@ class TableViewModel(QObject):
         Returns:
             True if export succeeded
         """
+        if self._data_array is None:
+            logger.error("No data to export")
+            return False
+            
         try:
             import csv
             
@@ -167,8 +169,8 @@ class TableViewModel(QObject):
                 # Write header
                 writer.writerow(self._column_headers)
                 
-                # Write data rows
-                writer.writerows(self._data_rows)
+                # Write data rows (convert NumPy array to list for CSV writer)
+                writer.writerows(self._data_array.tolist())
             
             logger.info(f"Table data exported to {file_path}")
             return True
@@ -180,15 +182,16 @@ class TableViewModel(QObject):
     def clear(self) -> None:
         """Clear all table data."""
         self._source_item_id = None
-        self._data_rows = []
+        self._data_array = None
         self._column_headers = []
         self.data_updated.emit()
         
     def get_info(self) -> Dict[str, Any]:
         """Get table information as a dictionary."""
+        row_count = 0 if self._data_array is None else self._data_array.shape[0]
         return {
             "source_item_id": self._source_item_id,
             "array_type": self._array_type,
-            "row_count": len(self._data_rows),
+            "row_count": row_count,
             "column_count": len(self._column_headers),
         }

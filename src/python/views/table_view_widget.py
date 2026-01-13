@@ -1,9 +1,10 @@
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTableWidget, QTableWidgetItem,
-                                QHeaderView, QMenu, QFileDialog, QMessageBox, QHBoxLayout,
+from PySide6.QtWidgets import (QWidget, QVBoxLayout, QTableView, QHeaderView, 
+                                QMenu, QFileDialog, QMessageBox, QHBoxLayout,
                                 QLabel, QPushButton)
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction
 from viewmodels.table_viewmodel import TableViewModel
+from models.table_data_model import TableDataModel
 from utils.logger import get_logger
 
 logger = get_logger("TableViewWidget")
@@ -39,15 +40,17 @@ class TableViewWidget(QWidget):
         
         layout.addLayout(info_layout)
         
-        # Table widget
-        self._table = QTableWidget()
+        # Table view with model
+        self._model = TableDataModel(self)
+        self._table = QTableView()
+        self._table.setModel(self._model)
         self._table.setAlternatingRowColors(True)
-        self._table.setSelectionBehavior(QTableWidget.SelectRows)
-        self._table.setSelectionMode(QTableWidget.ExtendedSelection)
+        self._table.setSelectionBehavior(QTableView.SelectRows)
+        self._table.setSelectionMode(QTableView.ExtendedSelection)
         self._table.setSortingEnabled(True)
         
-        # Auto-resize columns
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        # Optimize column resizing for performance
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.Interactive)
         self._table.horizontalHeader().setStretchLastSection(True)
         
         # Context menu
@@ -63,43 +66,21 @@ class TableViewWidget(QWidget):
     def _update_table(self) -> None:
         """Update table display from viewmodel data."""
         headers = self._viewmodel.get_column_headers()
-        rows = self._viewmodel.get_table_data()
+        data_array = self._viewmodel.get_table_data()
         
-        if not headers or not rows:
-            self._table.setRowCount(0)
-            self._table.setColumnCount(0)
+        if not headers or data_array is None or data_array.size == 0:
+            self._model.clear()
             self._info_label.setText("No data loaded")
             self._export_btn.setEnabled(False)
             return
         
-        # Disable sorting while updating
-        self._table.setSortingEnabled(False)
+        # Update the model (this triggers view update automatically)
+        self._model.set_data(data_array, headers)
         
-        # Set dimensions
-        self._table.setColumnCount(len(headers))
-        self._table.setRowCount(len(rows))
-        self._table.setHorizontalHeaderLabels(headers)
-        
-        # Populate data
-        for row_idx, row_data in enumerate(rows):
-            for col_idx, value in enumerate(row_data):
-                # Format value
-                if isinstance(value, float):
-                    formatted_value = f"{value:.6g}"  # Scientific notation for large/small numbers
-                else:
-                    formatted_value = str(value)
-                
-                item = QTableWidgetItem(formatted_value)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)  # Read-only
-                
-                # Right-align numbers
-                if isinstance(value, (int, float)):
-                    item.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
-                
-                self._table.setItem(row_idx, col_idx, item)
-        
-        # Re-enable sorting
-        self._table.setSortingEnabled(True)
+        # Resize columns to contents only on first load for better UX
+        # (subsequent updates won't resize to avoid jarring experience)
+        if self._table.horizontalHeader().sectionSize(0) == 100:  # Default size
+            self._table.resizeColumnsToContents()
         
         # Update info label
         info = self._viewmodel.get_info()
@@ -154,8 +135,7 @@ class TableViewWidget(QWidget):
 
     def clear_data(self) -> None:
         """Clear the table data."""
-        self._table.setRowCount(0)
-        self._table.setColumnCount(0)
+        self._model.clear()
         self._info_label.setText("No data loaded")
         self._export_btn.setEnabled(False)
         self._viewmodel.clear()  # Use proper ViewModel method

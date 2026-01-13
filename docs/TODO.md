@@ -9,7 +9,9 @@
 - context window 남은 양 확인 바
 - vtk render view llm에 넘기기 (이미지 input)
 - 탭 기능 상세 리뷰    
-    - time series도 탭에 잘 반영되는지 보기
+    - representation에서 gaussian point시 크기 설정 안됨
+    - graph view의 x axis array도 vector형 표시되게
 - subplot
 - 3d plot (contour)
 - heatmap
+- calculator filter

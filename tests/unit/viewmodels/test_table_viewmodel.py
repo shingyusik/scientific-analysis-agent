@@ -66,15 +66,16 @@ def test_set_data_source_success(mock_vtk_to_numpy, mock_get_vm, table_vm):
     
     # Check data content
     data = table_vm.get_table_data()
-    assert len(data) == 5
+    assert isinstance(data, np.ndarray)
+    assert data.shape == (5, 5)  # 5 rows, 5 columns
     # Row 0: Index=0, Scalar=10, VecX=1, VecY=0, VecZ=0
-    assert data[0][0] == 0
-    assert data[0][1] == 10.0
-    assert data[0][2] == 1
+    assert data[0, 0] == 0
+    assert data[0, 1] == 10.0
+    assert data[0, 2] == 1
 
 def test_clear(table_vm):
     # Manually populate
-    table_vm._data_rows = [[1, 2]]
+    table_vm._data_array = np.array([[1, 2]])
     table_vm._column_headers = ["A", "B"]
     
     mock_signal = MagicMock()
@@ -82,7 +83,7 @@ def test_clear(table_vm):
     
     table_vm.clear()
     
-    assert len(table_vm.get_table_data()) == 0
+    assert table_vm.get_table_data() is None
     assert len(table_vm.get_column_headers()) == 0
     mock_signal.assert_called_once()
 
