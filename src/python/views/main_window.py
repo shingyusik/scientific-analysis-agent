@@ -197,7 +197,7 @@ class MainWindow(QMainWindow):
         """Update properties panel when item style changes via toolbar."""
         selected = self._pipeline_vm.selected_item
         if selected and selected.id == item_id:
-            self._properties_panel.update_representation_indicator(style)
+            self._properties_panel.update_representation_style(style)
     
     def _setup_main_layout(self) -> None:
         """Setup the main layout with splitters."""
@@ -267,16 +267,20 @@ class MainWindow(QMainWindow):
         self._properties_panel.apply_filter_requested.connect(self._pipeline_vm.commit_filter)
         self._properties_panel.delete_requested.connect(self._on_delete_requested)
         self._properties_panel.opacity_changed.connect(self._on_opacity_changed)
-        self._properties_panel.point_size_changed.connect(self._pipeline_vm.set_point_size)
-        self._properties_panel.line_width_changed.connect(self._pipeline_vm.set_line_width)
-        self._properties_panel.gaussian_scale_changed.connect(self._pipeline_vm.set_gaussian_scale)
+        self._properties_panel.point_size_changed.connect(
+            lambda item_id, size: [self._pipeline_vm.set_point_size(item_id, size), self._vtk_vm.request_render()]
+        )
+        self._properties_panel.line_width_changed.connect(
+            lambda item_id, width: [self._pipeline_vm.set_line_width(item_id, width), self._vtk_vm.request_render()]
+        )
+        self._properties_panel.gaussian_scale_changed.connect(
+            lambda item_id, scale: [self._pipeline_vm.set_gaussian_scale(item_id, scale), self._vtk_vm.request_render()]
+        )
         self._properties_panel.color_by_changed.connect(self._on_color_by_changed)
         self._properties_panel.filter_params_changed.connect(self._on_filter_params_changed)
         self._properties_panel.legend_settings_changed.connect(self._vtk_vm.set_legend_settings)
         self._properties_panel.custom_range_requested.connect(self._on_custom_range)
-        self._properties_panel.representation_style_changed.connect(
-            lambda item_id, style: [self._pipeline_vm.set_representation(item_id, style), self._vtk_vm.request_render()]
-        )
+        self._properties_panel.representation_style_changed.connect(self._on_representation_style_changed)
         
         self._chat_panel.message_sent.connect(self._chat_vm.send_user_message)
         self._chat_panel.new_conversation_requested.connect(self._chat_vm.start_new_conversation)
@@ -460,6 +464,17 @@ class MainWindow(QMainWindow):
         if selected:
             self._pipeline_vm.set_representation(selected.id, style)
             self._vtk_vm.request_render()
+    
+    def _on_representation_style_changed(self, item_id: str, style: str) -> None:
+        """Handle representation style change from properties panel.
+        
+        This is called when the user changes the representation style in the
+        properties panel. It updates both the pipeline representation and
+        the properties panel UI to show appropriate controls.
+        """
+        self._pipeline_vm.set_representation(item_id, style)
+        self._properties_panel.update_representation_style(style)
+        self._vtk_vm.request_render()
     
     def _on_item_added(self, item) -> None:
         """Handle item added to pipeline."""

@@ -295,21 +295,6 @@ class PropertiesPanel(QWidget):
             
             layout.addRow("Background:", bg_combo)
             
-            # Representation
-            self._rep_combo = QComboBox()
-            self._rep_combo.addItems(self._vtk_vm_ref.REPRESENTATION_STYLES)
-            current_rep = self._vtk_vm_ref._current_representation
-            self._rep_combo.setCurrentText(current_rep)
-            
-            self._rep_combo.currentTextChanged.connect(lambda t: [
-                self._pending_changes.update({"representation": t}),
-                self._apply_btn.setEnabled(True)
-            ])
-            # Note: do NOT connect representation_changed from VTKViewModel to combo.
-            # PropertiesPanel Representation is per-item, not global.
-            
-            layout.addRow("Representation:", self._rep_combo)
-            
         self._vtk_layout.addWidget(group)
         
     def _update_camera_inputs(self, state: dict) -> None:
@@ -592,6 +577,37 @@ class PropertiesPanel(QWidget):
             self._rep_combo.blockSignals(True)
             self._rep_combo.setCurrentIndex(idx)
             self._rep_combo.blockSignals(False)
+    
+    def update_representation_style(self, style: str) -> None:
+        """Update representation style and rebuild VTK UI to show appropriate controls.
+        
+        This method should be called when the representation style changes externally
+        (e.g., from toolbar or programmatically) to ensure the Properties Panel
+        displays the correct controls for the new representation style.
+        """
+        if self._active_tab_type != TabType.VTK:
+            return
+            
+        # Update internal state
+        self._current_style = style
+        
+        # Rebuild VTK UI to show appropriate controls for the new style
+        if self._current_item and self._current_item.actor:
+            # Get current coloring state to preserve it
+            current_array = None
+            current_component = None
+            scalar_visible = False
+            
+            if self._current_item.actor:
+                mapper = self._current_item.actor.GetMapper()
+                if mapper and mapper.GetScalarVisibility():
+                    scalar_visible = True
+                    # Try to get current array name from mapper
+                    if hasattr(mapper, 'GetArrayName'):
+                        current_array = mapper.GetArrayName()
+            
+            # Rebuild the UI
+            self._rebuild_vtk_ui(current_array, current_component, scalar_visible)
             
     def _on_delete_clicked(self) -> None:
         """Handle delete button click."""
@@ -600,11 +616,33 @@ class PropertiesPanel(QWidget):
     
     def _add_styling_section(self) -> None:
         """Add styling controls section."""
-        group = QGroupBox(f"Styling: {self._current_style}")
+        group = QGroupBox("Styling")
         layout = QFormLayout(group)
         
+        # 1. Opacity control (First)
         self._add_opacity_control(layout)
         
+        # 2. Representation control (Second)
+        if self._vtk_vm_ref:
+            self._rep_combo = QComboBox()
+            self._rep_combo.addItems(self._vtk_vm_ref.REPRESENTATION_STYLES)
+            # Set current representation from _current_style
+            self._rep_combo.setCurrentText(self._current_style)
+            
+            # Trigger UI update immediately, but defer application to Apply button
+            def on_rep_changed(style):
+                # 1. Update internal UI state immediately to show relevant controls
+                self.update_representation_style(style)
+                
+                # 2. Queue the change for application
+                self._pending_changes["representation"] = style
+                self._apply_btn.setEnabled(True)
+            
+            self._rep_combo.currentTextChanged.connect(on_rep_changed)
+            
+            layout.addRow("Representation:", self._rep_combo)
+        
+        # 3. Style-specific controls (Last)
         if self._current_style == "Points":
             self._add_point_size_control(layout)
         elif self._current_style in ["Wireframe", "Surface With Edges"]:
@@ -620,6 +658,8 @@ class PropertiesPanel(QWidget):
             return
         
         current_opacity = int(self._current_item.actor.GetProperty().GetOpacity() * 100)
+        if "opacity" in self._pending_changes:
+            current_opacity = int(self._pending_changes["opacity"] * 100)
         
         row = QHBoxLayout()
         slider = QSlider(Qt.Horizontal)
@@ -659,6 +699,8 @@ class PropertiesPanel(QWidget):
             return
         
         current_size = self._current_item.actor.GetProperty().GetPointSize()
+        if "point_size" in self._pending_changes:
+            current_size = self._pending_changes["point_size"]
         
         row = QHBoxLayout()
         spin = ScientificDoubleSpinBox()
@@ -684,6 +726,8 @@ class PropertiesPanel(QWidget):
             return
         
         current_width = self._current_item.actor.GetProperty().GetLineWidth()
+        if "line_width" in self._pending_changes:
+            current_width = self._pending_changes["line_width"]
         
         row = QHBoxLayout()
         spin = ScientificDoubleSpinBox()
@@ -710,6 +754,8 @@ class PropertiesPanel(QWidget):
         
         mapper = self._current_item.actor.GetMapper()
         current_scale = mapper.GetScaleFactor() if hasattr(mapper, "GetScaleFactor") else 0.05
+        if "gaussian_scale" in self._pending_changes:
+            current_scale = self._pending_changes["gaussian_scale"]
         
         row = QHBoxLayout()
         spin = ScientificDoubleSpinBox()
