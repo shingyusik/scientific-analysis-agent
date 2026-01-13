@@ -8,9 +8,10 @@
 - 이미지 input
 - context window 남은 양 확인 바
 - vtk render view llm에 넘기기 (이미지 input)
-- 탭 기능 상세 리뷰    
-    - representation에서 gaussian point시 크기 설정 안됨
 - subplot
 - 3d plot (contour)
 - heatmap
 - calculator filter
+- extract data filter
+    - 좌->우 드래그 선택
+    - 우->좌 드래그 선택
