@@ -10,7 +10,6 @@
 - vtk render view llm에 넘기기 (이미지 input)
 - 탭 기능 상세 리뷰    
     - representation에서 gaussian point시 크기 설정 안됨
-    - graph view의 x axis array도 vector형 표시되게
 - subplot
 - 3d plot (contour)
 - heatmap

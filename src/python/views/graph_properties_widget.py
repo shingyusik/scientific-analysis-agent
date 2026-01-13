@@ -25,7 +25,14 @@ class GraphPropertiesWidget(QWidget):
         
         # X-axis array
         self._x_array_combo = QComboBox()
+        self._x_array_combo.currentIndexChanged.connect(self._on_x_array_changed)
         form.addRow("X Axis Array:", self._x_array_combo)
+        
+        # X-axis component
+        self._x_component_combo = QComboBox()
+        self._x_component_combo.addItem("Magnitude", -1)
+        self._x_component_combo.setEnabled(False)
+        form.addRow("  Component:", self._x_component_combo)
         
         # Y-axis array
         self._y_array_combo = QComboBox()
@@ -68,6 +75,7 @@ class GraphPropertiesWidget(QWidget):
         # Connect signals to notify parent
         self._type_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
         self._x_array_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
+        self._x_component_combo.currentIndexChanged.connect(lambda: self.graph_updated.emit())
         self._y_array_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
         self._y_component_combo.currentIndexChanged.connect(lambda: self.graph_updated.emit())
         self._array_type_combo.currentTextChanged.connect(lambda: self.graph_updated.emit())
@@ -119,14 +127,46 @@ class GraphPropertiesWidget(QWidget):
         self.blockSignals(False)
         
         # Update component options
+        self._on_x_array_changed()
         self._on_y_array_changed()
         
         # Restore component selection
+        x_comp = config.get("x_component", 0)
+        idx = self._x_component_combo.findData(x_comp)
+        if idx >= 0:
+            self._x_component_combo.setCurrentIndex(idx)
+        
         y_comp = config.get("y_component", 0)
-        # Find data and select
         idx = self._y_component_combo.findData(y_comp)
         if idx >= 0:
             self._y_component_combo.setCurrentIndex(idx)
+        
+    def _on_x_array_changed(self, index: int = -1) -> None:
+        """Update component dropdown based on selected X array."""
+        idx = self._x_array_combo.currentIndex()
+        if idx < 0:
+            return
+            
+        num_components = self._x_array_combo.itemData(idx)
+        if num_components is None:
+            num_components = 1
+            
+        self._x_component_combo.blockSignals(True)
+        self._x_component_combo.clear()
+        
+        if num_components > 1:
+            self._x_component_combo.addItem("Magnitude", -1)
+            self._x_component_combo.addItem("X", 0)
+            self._x_component_combo.addItem("Y", 1)
+            if num_components >= 3:
+                self._x_component_combo.addItem("Z", 2)
+            self._x_component_combo.setEnabled(True)
+            self._x_component_combo.setCurrentIndex(0) # Default to Magnitude
+        else:
+            self._x_component_combo.addItem("Magnitude", -1)
+            self._x_component_combo.setEnabled(False)
+            
+        self._x_component_combo.blockSignals(False)
         
     def _on_y_array_changed(self, index: int = -1) -> None:
         """Update component dropdown based on selected Y array."""
@@ -160,7 +200,13 @@ class GraphPropertiesWidget(QWidget):
         if not self._item or not self._viewmodel:
             return
             
-        # Get selected component
+        # Get selected components
+        x_component = 0
+        if self._x_component_combo.isEnabled():
+            x_component = self._x_component_combo.currentData()
+            if x_component is None:
+                x_component = -1 # Default to Magnitude if issue
+        
         y_component = 0
         if self._y_component_combo.isEnabled():
             y_component = self._y_component_combo.currentData()
@@ -174,7 +220,7 @@ class GraphPropertiesWidget(QWidget):
             self._x_array_combo.currentText(),
             self._y_array_combo.currentText(),
             self._array_type_combo.currentText(),
-            x_component=0, # Assuming X-axis usually uses Index or scalar
+            x_component=x_component,
             y_component=y_component
         )
         
