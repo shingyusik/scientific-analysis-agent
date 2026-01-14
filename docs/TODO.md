@@ -25,6 +25,7 @@
 ## 📊 P1: Essential Visualization (기본 시각화 및 비교)
 **목표:** 데이터 경향성을 파악하기 위한 시각화 보강.
 
+- [ ] **Interactive Data Inspection (Hover)**: Render View의 데이터 포인트에 마우스를 올리면 값 표시 (Tooltip)
 - [ ] **Subplot**: 여러 케이스나 변수를 동시에 비교 (Multi-view)
 - [ ] **Heatmap**: 2D 데이터 분포 확인
 - [ ] **3D Plot (Surface/Contour)**: 3차원 표면/등고선 확인
