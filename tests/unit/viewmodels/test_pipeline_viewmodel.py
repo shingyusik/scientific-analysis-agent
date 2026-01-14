@@ -102,3 +102,106 @@ def test_hierarchy_deletion(pipeline_vm):
     # Delete parent should delete child
     pipeline_vm.delete_item(parent.id)
     assert len(pipeline_vm.items) == 0
+
+
+def test_get_item_data_arrays_no_item(pipeline_vm):
+    """Test get_item_data_arrays with no item selected."""
+    result = pipeline_vm.get_item_data_arrays()
+    assert "Error" in result
+    assert "No item specified" in result
+
+
+def test_get_item_data_arrays_not_found(pipeline_vm):
+    """Test get_item_data_arrays with invalid item_id."""
+    result = pipeline_vm.get_item_data_arrays("invalid-id")
+    assert "Error" in result
+    assert "not found" in result
+
+
+def test_get_item_data_arrays_empty(pipeline_vm):
+    """Test get_item_data_arrays with item that has no arrays."""
+    vtk_data = MagicMock()
+    # Mock point and cell data with no arrays
+    pt_data = MagicMock()
+    pt_data.GetNumberOfArrays.return_value = 0
+    cell_data = MagicMock()
+    cell_data.GetNumberOfArrays.return_value = 0
+    vtk_data.GetPointData.return_value = pt_data
+    vtk_data.GetCellData.return_value = cell_data
+    
+    item = pipeline_vm.add_source("Empty Data", vtk_data, MagicMock())
+    
+    result = pipeline_vm.get_item_data_arrays(item.id)
+    assert "No data arrays available" in result
+
+
+def test_get_item_data_arrays_with_arrays(pipeline_vm):
+    """Test get_item_data_arrays with item that has both point and cell arrays."""
+    vtk_data = MagicMock()
+    
+    # Mock point data with one scalar and one vector
+    pt_arr1 = MagicMock()
+    pt_arr1.GetName.return_value = "Temperature"
+    pt_arr1.GetNumberOfComponents.return_value = 1
+    
+    pt_arr2 = MagicMock()
+    pt_arr2.GetName.return_value = "Velocity"
+    pt_arr2.GetNumberOfComponents.return_value = 3
+    
+    pt_data = MagicMock()
+    pt_data.GetNumberOfArrays.return_value = 2
+    pt_data.GetArray.side_effect = lambda i: [pt_arr1, pt_arr2][i]
+    
+    # Mock cell data with one scalar
+    cell_arr = MagicMock()
+    cell_arr.GetName.return_value = "Pressure"
+    cell_arr.GetNumberOfComponents.return_value = 1
+    
+    cell_data = MagicMock()
+    cell_data.GetNumberOfArrays.return_value = 1
+    cell_data.GetArray.return_value = cell_arr
+    
+    vtk_data.GetPointData.return_value = pt_data
+    vtk_data.GetCellData.return_value = cell_data
+    
+    item = pipeline_vm.add_source("Test Data", vtk_data, MagicMock())
+    
+    result = pipeline_vm.get_item_data_arrays(item.id)
+    
+    assert "Test Data" in result
+    assert "Point Data" in result
+    assert "Temperature" in result
+    assert "scalar" in result
+    assert "Velocity" in result
+    assert "vector" in result
+    assert "3 components" in result
+    assert "Cell Data" in result
+    assert "Pressure" in result
+
+
+def test_get_item_data_arrays_with_selected_item(pipeline_vm):
+    """Test get_item_data_arrays uses selected item when no item_id provided."""
+    vtk_data = MagicMock()
+    pt_arr = MagicMock()
+    pt_arr.GetName.return_value = "Scalar"
+    pt_arr.GetNumberOfComponents.return_value = 1
+    
+    pt_data = MagicMock()
+    pt_data.GetNumberOfArrays.return_value = 1
+    pt_data.GetArray.return_value = pt_arr
+    
+    cell_data = MagicMock()
+    cell_data.GetNumberOfArrays.return_value = 0
+    
+    vtk_data.GetPointData.return_value = pt_data
+    vtk_data.GetCellData.return_value = cell_data
+    
+    item = pipeline_vm.add_source("Selected Item", vtk_data, MagicMock())
+    pipeline_vm.select_item(item.id)
+    
+    # Call without item_id, should use selected item
+    result = pipeline_vm.get_item_data_arrays()
+    
+    assert "Selected Item" in result
+    assert "Scalar" in result
+

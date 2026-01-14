@@ -91,6 +91,51 @@ class PipelineViewModel(QObject):
         return "Pipeline items:\n" + "\n".join(result) + selected_info
     
     @expose_tool(
+        name="get_item_data_arrays",
+        description=(
+            "Retrieves the available data arrays (variables) for a specific pipeline item.\n"
+            "Use this to discover what scalar/vector fields are available for coloring or calculations.\n"
+            "Parameters:\n"
+            "- item_id: (Optional) The unique ID of the item. If not provided, uses the currently selected item.\n"
+            "Returns:\n"
+            "- A formatted list of available arrays with their names, types (POINT/CELL), and number of components.\n"
+            "  - 1 component = scalar, 3+ components = vector"
+        )
+    )
+    def get_item_data_arrays(self, item_id: Optional[str] = None) -> str:
+        """Get data arrays available for a pipeline item."""
+        target_id = item_id or (self.selected_item.id if self.selected_item else None)
+        if not target_id:
+            return "Error: No item specified and no item selected."
+        
+        item = self._items.get(target_id)
+        if not item:
+            return f"Error: Item {target_id} not found."
+        
+        arrays = item.get_data_arrays()
+        if not arrays:
+            return f"No data arrays available for '{item.name}'."
+        
+        lines = [f"Data arrays for '{item.name}':"]
+        
+        point_arrays = [(name, comp) for name, arr_type, comp in arrays if arr_type == "POINT"]
+        cell_arrays = [(name, comp) for name, arr_type, comp in arrays if arr_type == "CELL"]
+        
+        if point_arrays:
+            lines.append("\nPoint Data:")
+            for name, num_comp in point_arrays:
+                comp_type = "scalar" if num_comp == 1 else f"vector ({num_comp} components)"
+                lines.append(f"  - {name}: {comp_type}")
+        
+        if cell_arrays:
+            lines.append("\nCell Data:")
+            for name, num_comp in cell_arrays:
+                comp_type = "scalar" if num_comp == 1 else f"vector ({num_comp} components)"
+                lines.append(f"  - {name}: {comp_type}")
+        
+        return "\n".join(lines)
+    
+    @expose_tool(
         name="select_pipeline_item",
         description=(
             "Selects a specific object in the pipeline by its unique ID.\n"
