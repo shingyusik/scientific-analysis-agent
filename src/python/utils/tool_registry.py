@@ -16,7 +16,13 @@ def expose_tool(name: str, description: str):
         return func
     return decorator
 
-def expose_filter_tool(name: str, description: str, params_model: Type, update_description: Optional[str] = None):
+def expose_filter_tool(
+    name: str, 
+    description: str, 
+    params_model: Type, 
+    update_description: Optional[str] = None,
+    result_formatter: Optional[Callable] = None
+):
     """Decorator to expose a filter's apply_filter method as a tool.
     
     This will automatically generate a tool function that:
@@ -29,6 +35,10 @@ def expose_filter_tool(name: str, description: str, params_model: Type, update_d
         description: Description of the apply tool
         params_model: The dataclass defining parameters
         update_description: Optional description for the update tool. If None, a generic one is generated.
+        result_formatter: Optional function(result_item, params, target_item) -> str for custom result formatting.
+                          If provided, this function formats the success message.
+                          If it returns None, a default message is used.
+                          If it returns a string starting with 'Error:', it's treated as an error.
     """
     def decorator(func: Callable):
         func._is_filter_tool = True
@@ -36,6 +46,7 @@ def expose_filter_tool(name: str, description: str, params_model: Type, update_d
         func._tool_description = description
         func._update_tool_description = update_description
         func._params_model = params_model
+        func._result_formatter = result_formatter
         return func
     return decorator
 
@@ -96,7 +107,14 @@ def _create_pydantic_model_from_dataclass(dc_cls: Type, all_optional: bool = Fal
     model_name = f"{dc_cls.__name__}{'Update' if all_optional else ''}ToolSchema"
     return create_model(model_name, **field_definitions)
 
-def _create_dynamic_tool_func(vm: Any, filter_instance: Any, tool_name: str, params_model: Type, filter_type: Optional[str] = None) -> Callable:
+def _create_dynamic_tool_func(
+    vm: Any, 
+    filter_instance: Any, 
+    tool_name: str, 
+    params_model: Type, 
+    filter_type: Optional[str] = None,
+    result_formatter: Optional[Callable] = None
+) -> Callable:
     """Create the actual function that will run when the tool is called."""
     
     def dynamic_tool_func(item_id: Optional[str] = None, **kwargs) -> str:
@@ -202,6 +220,18 @@ def _create_dynamic_tool_func(vm: Any, filter_instance: Any, tool_name: str, par
         
         if result_item:
             pipeline_vm.commit_filter(result_item.id)
+            
+            # Use custom result_formatter if provided
+            if result_formatter:
+                try:
+                    formatted = result_formatter(result_item, constructed_params, target_item)
+                    if formatted is not None:
+                        return formatted
+                except Exception as e:
+                    # If formatter fails, fall back to default message
+                    pass
+            
+            # Default message
             return f"Applied {filter_instance.display_name} to '{target_item.name}'. New item: '{result_item.name}' (id: {result_item.id})"
         return "Error: Failed to apply filter"
 
@@ -299,12 +329,16 @@ def generate_tools(instance: Any, filter_type_override: Optional[str] = None) ->
             tool_name = getattr(func, "_tool_name")
             tool_description = getattr(func, "_tool_description")
             params_model = getattr(func, "_params_model")
+            result_formatter = getattr(func, "_result_formatter", None)
             
             logger.debug(f"Generating dynamic filter tool '{tool_name}' from {instance.__class__.__name__}.{name}")
             
             # 1. Create APPLY Tool
             args_schema = _create_pydantic_model_from_dataclass(params_model, all_optional=False)
-            wrapper_func = _create_dynamic_tool_func(instance, instance, tool_name, params_model, filter_type_override)
+            wrapper_func = _create_dynamic_tool_func(
+                instance, instance, tool_name, params_model, 
+                filter_type_override, result_formatter
+            )
             
             tool = StructuredTool.from_function(
                 func=wrapper_func,

@@ -496,6 +496,8 @@ class MainWindow(QMainWindow):
         self._pipeline_browser.update_item(item)
         if item == self._pipeline_vm.selected_item:
             self._update_properties_panel(item)
+            # Update information tab with new data arrays
+            self._info_page.setPlainText(item.get_info_string())
         self._vtk_vm.request_render()
     
     def _on_selection_changed(self, item) -> None:
