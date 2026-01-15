@@ -30,6 +30,7 @@
 - [ ] **Subplot**: 여러 케이스나 변수를 동시에 비교 (Multi-view)
 - [ ] **Heatmap**: 2D 데이터 분포 확인
 - [ ] **3D Plot (Surface/Contour)**: 3차원 표면/등고선 확인
+- [ ] **2D View (Orthographic)**: 현재 카메라 시점에서 원근감을 제거한 평면 투영 뷰
 
 ---
 
