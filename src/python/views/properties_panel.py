@@ -44,6 +44,10 @@ class PropertiesPanel(QWidget):
         
         self._active_tab_type: TabType = TabType.VTK  # Default
         
+        # Signal connection tracking
+        self._camera_signal_connected = False
+        self._bg_combo_ref = None  # Reference to track background combo connection
+        
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
@@ -157,8 +161,19 @@ class PropertiesPanel(QWidget):
         
         # Update universal buttons
         self._delete_btn.setEnabled(item is not None)
-        # Apply button initially disabled until changes are made
-        self._apply_btn.setEnabled(False)
+        
+        # Apply button: enable for filters that haven't been applied yet (apply_immediately=False)
+        should_enable_apply = False
+        if item and "filter" in item.item_type:
+            import filters
+            filter_class = filters.get_filter(item.item_type)
+            if filter_class and self._render_service:
+                filter_instance = filter_class(self._render_service)
+                # If filter doesn't apply immediately and vtk_data is same as parent's data,
+                # it means the filter hasn't been applied yet
+                if not filter_instance.apply_immediately:
+                    should_enable_apply = True
+        self._apply_btn.setEnabled(should_enable_apply)
         
         if self._active_tab_type == TabType.VTK:
              # Store ViewModel reference for VTK properties
@@ -175,6 +190,30 @@ class PropertiesPanel(QWidget):
     
     def _clear_vtk_layout(self) -> None:
         """Clear all widgets from the VTK layout."""
+        # Disconnect signals BEFORE deleting widgets to prevent RuntimeError
+        if self._camera_signal_connected and hasattr(self, '_vtk_vm_ref') and self._vtk_vm_ref:
+            try:
+                self._vtk_vm_ref.camera_state_changed.disconnect(self._update_camera_inputs)
+            except (TypeError, RuntimeError):
+                pass
+            self._camera_signal_connected = False
+        
+        # Disconnect background combo signal
+        if self._bg_combo_ref is not None and hasattr(self, '_vtk_vm_ref') and self._vtk_vm_ref:
+            try:
+                # Check if the Qt object is still valid before disconnect
+                self._bg_combo_ref.objectName()  # This will raise RuntimeError if deleted
+                self._vtk_vm_ref.background_preset_changed.disconnect(self._bg_combo_ref.setCurrentText)
+            except (TypeError, RuntimeError):
+                pass
+            self._bg_combo_ref = None
+        
+        # Clear spinbox references to prevent access after deletion
+        self._cam_pos_spins = []
+        self._cam_focal_spins = []
+        self._cam_up_spins = []
+        self._cam_zoom_spin = None
+        
         while self._vtk_layout.count():
             child = self._vtk_layout.takeAt(0)
             if child.widget():
@@ -192,8 +231,14 @@ class PropertiesPanel(QWidget):
         
         item = self._current_item
         
+        # For filters without actor yet (apply_immediately=False), show filter params first
+        if "filter" in item.item_type:
+            self._add_filter_params_section(item)
+        
         if not item.actor:
-            self._vtk_layout.addWidget(QLabel("No 3D styling available for this source."))
+            if "filter" not in item.item_type:
+                self._vtk_layout.addWidget(QLabel("No 3D styling available for this source."))
+            self._vtk_layout.addStretch()
             return
         
         if self._data_arrays:
@@ -205,9 +250,6 @@ class PropertiesPanel(QWidget):
         if self._data_arrays:
             legend_enabled = scalar_visible and item.visible
             self._add_legend_section(legend_enabled)
-        
-        if "filter" in item.item_type:
-            self._add_filter_params_section(item)
         
         self._vtk_layout.addStretch()
         
@@ -259,8 +301,9 @@ class PropertiesPanel(QWidget):
         # Connect signals
         # Connect signals
         if self._vtk_vm_ref:
-             # Update inputs from ViewModel state change
+             # Update inputs from ViewModel state change (no disconnect needed here, done in _clear_vtk_layout)
             self._vtk_vm_ref.camera_state_changed.connect(self._update_camera_inputs)
+            self._camera_signal_connected = True
             
             # Queue changes
             def queue_camera_change():
@@ -291,6 +334,8 @@ class PropertiesPanel(QWidget):
                 self._pending_changes.update({"background": t}),
                 self._apply_btn.setEnabled(True)
             ])
+            # Store reference and connect (disconnect done in _clear_vtk_layout)
+            self._bg_combo_ref = bg_combo
             self._vtk_vm_ref.background_preset_changed.connect(bg_combo.setCurrentText)
             
             layout.addRow("Background:", bg_combo)
@@ -299,8 +344,21 @@ class PropertiesPanel(QWidget):
         
     def _update_camera_inputs(self, state: dict) -> None:
         """Update camera inputs from state dictionary."""
+        # Safety check: ensure widgets exist
+        if not hasattr(self, '_cam_pos_spins') or not self._cam_pos_spins:
+            return
+            
         # Block signals to prevent feedback loop
         all_spins = self._cam_pos_spins + self._cam_focal_spins + self._cam_up_spins + [self._cam_zoom_spin]
+        
+        # Check if C++ objects are still valid
+        for spin in all_spins:
+            try:
+                # Accessing any property will raise RuntimeError if deleted
+                spin.objectName()
+            except RuntimeError:
+                return
+
         for spin in all_spins:
             spin.blockSignals(True)
             
@@ -318,7 +376,10 @@ class PropertiesPanel(QWidget):
                 self._cam_zoom_spin.setValue(state["zoom"])
         finally:
             for spin in all_spins:
-                spin.blockSignals(False)
+                try:
+                    spin.blockSignals(False)
+                except RuntimeError:
+                    pass
     
     def _add_filter_params_section(self, item: PipelineItem) -> None:
         """Add filter parameters section using the filter registry."""

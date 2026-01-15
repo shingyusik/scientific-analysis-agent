@@ -3,6 +3,8 @@ from filters.filter_base import FilterBase
 from filters.slice_filter import SliceFilter
 from filters.clip_filter import ClipFilter
 from filters.calculator_filter import CalculatorFilter
+from filters.threshold_filter import ThresholdFilter
+
 
 _filter_registry: Dict[str, Type[FilterBase]] = {}
 
@@ -25,5 +27,6 @@ def get_all_filter_types() -> list[str]:
 register_filter("slice_filter", SliceFilter)
 register_filter("clip_filter", ClipFilter)
 register_filter("calculator_filter", CalculatorFilter)
+register_filter("threshold_filter", ThresholdFilter)
 
 

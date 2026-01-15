@@ -14,7 +14,7 @@
 ## 🛠 P0: Core Post-Processing (필수 후처리 기능)
 **목표:** "불편하더라도 쓸만한" 분석 도구가 되기 위한 데이터 추출/필터링 기능.
 
-- [ ] **Threshold Filter**: 스칼라 값 범위로 데이터 필터링 (예: `T > 300 AND T < 500`)
+- [x] **Threshold Filter**: 스칼라 값 범위로 데이터 필터링 (예: `T > 300 AND T < 500`) (`src/python/filters/threshold_filter.py`)
 - [ ] **Contour Filter**: 등고선/등전위면 생성
 - [ ] **Extract Data Filter**:
     - [ ] **ROI Select (Interactive)**: 화면상에서 드래그(Box Selection)하여 관심 영역 데이터만 추출
@@ -82,21 +82,3 @@
 - [ ] **이전 대화 참조**: 특정 메시지 인용 기능
 
 ---
-
-## 🔧 Agent Architecture Diagram (현재 → 목표)
-
-**현재 구조:**
-```
-User → Guardrail → Agent → Tools → Agent → ... → END
-         ↓ (blocked)
-        END
-```
-
-**목표 구조 (Phase 1-3 완료 시):**
-```
-User → Guardrail → Classifier → [Simple Path] → Agent → Tools → Verifier → END
-                       ↓                                          ↓ (fail)
-                  [Multi-step Path]                           Re-planner
-                       ↓
-                   Planner → Executor (Loop) → Verifier → END
-```
