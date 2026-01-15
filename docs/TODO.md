@@ -7,7 +7,8 @@
 - [x] **Line/Scatter/Histogram/Bar Graph**: 기본 그래프 타입 지원
 - [x] **Multi-source Graph**: 여러 데이터 소스를 한 그래프에 표시
 - [x] **Time Series Support**: 시계열 데이터 재생 및 탐색
-- [x] **Basic Agent Graph**: Guardrail → Agent → Tools 구조, Dynamic tool 로딩
+- [x] **Basic Agent Graph**: ~~Guardrail →~~ Agent → Tools 구조, Dynamic tool 로딩
+  > ⚠️ **Guardrail 임시 비활성화** (2025-01-15): 판단 기준이 애매하여 비활성화됨. `graph.py` 참조.
 
 ---
 

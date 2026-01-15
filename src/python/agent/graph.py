@@ -213,21 +213,28 @@ def create_agent():
     tool_node = ToolNode(tools)
     logger.info(f"Initialized tool node with {len(tools)} tools")
     agent_node = create_agent_node(model, tools)
-    guardrail_node = create_guardrail_node(model, tools)
+    
+    # NOTE: Guardrail feature DISABLED (2025-01-15)
+    # Temporarily disabled due to ambiguous filtering criteria.
+    # Re-enable after establishing clearer guidelines.
+    # guardrail_node = create_guardrail_node(model, tools)
     
     workflow = StateGraph(AgentState)
     
-    workflow.add_node("guardrail", guardrail_node)
+    # NOTE: Guardrail node disabled
+    # workflow.add_node("guardrail", guardrail_node)
     workflow.add_node("agent", agent_node)
     workflow.add_node("tools", tool_node)
     
-    workflow.set_entry_point("guardrail")
+    # NOTE: Set agent as direct entry point (bypassing guardrail)
+    workflow.set_entry_point("agent")
     
-    workflow.add_conditional_edges(
-        "guardrail",
-        route_after_guardrail,
-        {"agent": "agent", "end": END}
-    )
+    # NOTE: Guardrail routing disabled
+    # workflow.add_conditional_edges(
+    #     "guardrail",
+    #     route_after_guardrail,
+    #     {"agent": "agent", "end": END}
+    # )
     workflow.add_conditional_edges(
         "agent",
         should_continue,
@@ -240,5 +247,5 @@ def create_agent():
     
     
     checkpointer = MemorySaver()
-    logger.info("Agent Workflow Compiled")
+    logger.info("Agent Workflow Compiled (Guardrail DISABLED)")
     return workflow.compile(checkpointer=checkpointer)

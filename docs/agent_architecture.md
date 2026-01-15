@@ -2,18 +2,20 @@
 
 ## 현재 구조 (Current)
 
+> ⚠️ **Guardrail 임시 비활성화** (2025-01-15): 판단 기준이 애매하여 바이패스됨. `src/python/agent/graph.py` 참조.
+
 ```mermaid
 flowchart LR
-    U[User] --> G[Guardrail]
-    G -->|blocked| E1[END]
-    G -->|allowed| A[Agent]
+    U[User] --> A[Agent]
     A -->|tool_calls| T[Tools]
     T --> A
     A -->|done| E2[END]
     
-    style G fill:#ff9999
+    G[Guardrail]:::disabled -.->|"비활성화됨"| A
+    
     style A fill:#99ccff
     style T fill:#99ff99
+    classDef disabled fill:#cccccc,stroke:#999999,stroke-dasharray: 5 5
 ```
 
 ---
@@ -107,7 +109,7 @@ flowchart TB
 
 | Node | 역할 |
 |------|------|
-| **Guardrail** | 보안/스팸 필터링 |
+| ~~**Guardrail**~~ | ⚠️ **비활성화됨** - 보안/스팸 필터링 |
 | **Classifier** | 요청 복잡도 분류 (simple/multi-step) |
 | **Planner** | 멀티스텝 작업 계획 수립 |
 | **Agent** | 도구 호출 및 응답 생성 |

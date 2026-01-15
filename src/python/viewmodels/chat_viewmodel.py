@@ -109,6 +109,8 @@ class StreamingAgentWorker(QThread):
                 node_name = metadata.get("langgraph_node", "")
                 
                 if isinstance(message, AIMessageChunk):
+                    # NOTE: Guardrail node disabled (2025-01-15)
+                    # Keep this filtering logic when re-enabling guardrail
                     if node_name == "guardrail":
                         continue
                     if hasattr(message, 'tool_call_chunks') and message.tool_call_chunks:
