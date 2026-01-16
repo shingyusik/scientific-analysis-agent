@@ -2,6 +2,11 @@
 
 ## 6.1 테이블 뷰 (TableViewWidget)
 
+> [!IMPORTANT]
+> **데이터 표시 규칙**: Table View는 **Pipeline Browser에서 현재 선택된 단일 객체**의 데이터를 표시합니다.
+> - 선택된 아이템이 변경되면 테이블 내용도 자동으로 업데이트됩니다.
+> - 한 번에 하나의 객체 데이터만 표시됩니다 (다중 선택 불가).
+
 ### 6.1.1 기본 정보
 
 | 속성 | 값 |
@@ -156,6 +161,12 @@ class TableDataModel(QAbstractTableModel):
 ---
 
 ## 6.2 그래프 뷰 (GraphViewWidget)
+
+> [!IMPORTANT]
+> **데이터 표시 규칙**: Graph View는 **다중 데이터 소스를 겹쳐서 표시**할 수 있습니다.
+> - 여러 Pipeline 아이템의 데이터를 동시에 하나의 그래프에 오버레이할 수 있습니다.
+> - 각 데이터 소스는 고유한 색상과 라벨로 구분됩니다.
+> - Pipeline Browser에서 체크박스로 표시/숨김을 제어할 수 있습니다.
 
 ### 6.2.1 기본 정보
 

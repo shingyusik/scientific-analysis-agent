@@ -20,7 +20,8 @@ porting-guide/
 ├── 11-interaction-logic.md         # 사용자 상호작용 논리
 ├── 12-data-flow-architecture.md    # 데이터 흐름 및 아키텍처
 ├── 13-performance-optimization.md  # 성능 최적화 전략
-└── 14-constants-defaults.md        # 상수 및 기본값 정의
+├── 14-constants-defaults.md        # 상수 및 기본값 정의
+└── 15-llm-agent-architecture.md    # LLM 에이전트 아키텍처 상세
 ```
 
 ## 🎯 문서 목적
